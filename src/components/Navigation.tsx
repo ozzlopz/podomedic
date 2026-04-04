@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { Phone, Calendar } from 'lucide-react';
+import { Phone, Calendar, BookOpenText } from 'lucide-react';
 
 export default function Navigation() {
   const { user, role } = useAuth();
@@ -72,6 +72,10 @@ export default function Navigation() {
           <Link href="/booking" className="flex items-center gap-1 font-semibold text-white/90 transition-colors hover:text-teal-300">
             <Calendar className="w-4 h-4" />
             Reservar Cita
+          </Link>
+          <Link href="/blog" className="flex items-center gap-1 font-semibold text-white/90 transition-colors hover:text-teal-300">
+            <BookOpenText className="w-4 h-4" />
+            Blog
           </Link>
           {user ? (
             <>
