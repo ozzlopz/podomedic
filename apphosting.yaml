@@ -23,7 +23,7 @@ runConfig:
   #   secret: mySecretRef
 env:
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: "..."
+    value: "AIzaSyCFRNmfK86t2F4t1DfJiV6r2_dA0lW7_7M"
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
     value: "podomedic-f8c1c.firebaseapp.com"
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
