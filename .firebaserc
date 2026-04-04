@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "podomedic-f8c1c",
+    "production": "podomedic-f8c1c"
+  },
+  "targets": {},
+  "etags": {}
+}

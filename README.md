@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Podomedic
 
-## Getting Started
+Plataforma web para consultorio podológico construida con Next.js, React, Firebase Authentication y Firestore.
 
-First, run the development server:
+## Características
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Páginas públicas**: Landing page, contacto y reserva de citas
+- **Autenticación**: Sistema de login con roles de admin y customer
+- **Panel de Admin**: Visualizar clientes registrados, registrar nuevos clientes, ver citas
+- **Panel de Customer**: Ver/editar perfil, historial de consultas
+- **Base de datos**: Firestore para almacenamiento de datos
+
+## Tecnologías
+
+- **Frontend**: Next.js 16, React, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Autenticación**: Firebase Auth
+- **Base de datos**: Firestore
+- **Estilos**: Tailwind CSS
+
+## Instalación
+
+1. Clona el repositorio
+2. Instala dependencias: `npm install`
+3. Configura Firebase:
+   - Crea un proyecto en Firebase Console
+   - Habilita Authentication y Firestore
+   - Copia las credenciales a `.env.local`
+4. Ejecuta el servidor de desarrollo: `npm run dev`
+
+## Variables de Entorno
+
+Crea un archivo `.env.local` con:
+
+```
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `npm run dev`: Inicia el servidor de desarrollo
+- `npm run build`: Construye la aplicación para producción
+- `npm run start`: Inicia el servidor de producción
+- `npm run lint`: Ejecuta ESLint
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Estructura del Proyecto
 
-## Learn More
+- `src/app/`: Páginas de Next.js App Router
+- `src/components/`: Componentes reutilizables
+- `src/contexts/`: Contextos de React (autenticación)
+- `src/lib/`: Utilidades y configuración (Firebase)
 
-To learn more about Next.js, take a look at the following resources:
+## Despliegue
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Despliega en Vercel o cualquier plataforma que soporte Next.js. Asegúrate de configurar las variables de entorno en la plataforma de despliegue.

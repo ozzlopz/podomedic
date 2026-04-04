@@ -1,0 +1,133 @@
+'use client';
+
+import Link from 'next/link';
+import { useState } from 'react';
+import { Phone, Mail, MapPin, Send, ArrowRight, Clock3, ShieldCheck } from 'lucide-react';
+
+export default function Contact() {
+  const [form, setForm] = useState({ name: '', email: '', message: '' });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Handle form submission
+    alert('Mensaje enviado');
+  };
+
+  return (
+    <div className="flex-1 bg-[linear-gradient(180deg,#f8fbff_0%,#eef8fb_46%,#ffffff_100%)] px-4 pb-20 sm:px-6">
+      <div className="mx-auto max-w-6xl">
+        <section className="grid gap-10 py-8 lg:grid-cols-[minmax(0,1fr)_420px]">
+          <div>
+            <span className="inline-flex rounded-full border border-cyan-100 bg-white/80 px-4 py-2 text-sm font-semibold uppercase tracking-[0.24em] text-cyan-700 shadow-sm backdrop-blur-sm">
+              Contacto
+            </span>
+            <h1 className="mt-6 max-w-3xl text-4xl font-black leading-tight text-slate-950 sm:text-5xl lg:text-6xl">
+              Estamos aquí para orientarte antes de tu consulta.
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
+              Escríbenos si tienes dudas sobre tratamientos, disponibilidad o el tipo de atención que necesitas.
+            </p>
+
+            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-3xl border border-white/70 bg-white/80 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+                <Phone className="h-7 w-7 text-cyan-600" />
+                <p className="mt-4 text-lg font-black text-slate-950">Respuesta cercana</p>
+                <p className="mt-1 text-sm text-slate-600">Atención humana desde el primer contacto.</p>
+              </div>
+              <div className="rounded-3xl border border-white/70 bg-white/80 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+                <ShieldCheck className="h-7 w-7 text-blue-600" />
+                <p className="mt-4 text-lg font-black text-slate-950">Orientación clara</p>
+                <p className="mt-1 text-sm text-slate-600">Te ayudamos a identificar la mejor opción.</p>
+              </div>
+              <div className="rounded-3xl border border-white/70 bg-white/80 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+                <Clock3 className="h-7 w-7 text-teal-600" />
+                <p className="mt-4 text-lg font-black text-slate-950">Agilidad</p>
+                <p className="mt-1 text-sm text-slate-600">Te respondemos para ayudarte a avanzar rápido.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-cyan-100 bg-slate-950 p-8 text-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-300">Información de contacto</p>
+            <div className="mt-8 space-y-4">
+              <div className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <Phone className="mt-1 h-5 w-5 text-teal-300" />
+                <div>
+                  <p className="font-semibold text-white">WhatsApp</p>
+                  <p className="text-white/70">771 962 5242</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <Mail className="mt-1 h-5 w-5 text-cyan-300" />
+                <div>
+                  <p className="font-semibold text-white">Email</p>
+                  <p className="text-white/70">info@podomedic.com</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <MapPin className="mt-1 h-5 w-5 text-emerald-300" />
+                <div>
+                  <p className="font-semibold text-white">Dirección</p>
+                  <p className="text-white/70">Av. La Principal 10, Real de Toledo. Segundo Piso. Arriba de Laboratorios Coahuila</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 rounded-[1.75rem] bg-white/6 p-6">
+              <h3 className="text-xl font-bold text-white">Horarios de atención</h3>
+              <div className="mt-4 space-y-2 text-white/70">
+                <p>Lunes a viernes: 11:00 a.m. - 7:00 p.m.</p>
+                <p>Sábados: 10:00 a.m. - 2:00 p.m.</p>
+              </div>
+              <Link href="/booking" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-cyan-200 transition-colors hover:text-cyan-100">
+                Reservar cita
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <div className="mx-auto max-w-4xl rounded-[2.5rem] border border-slate-200/80 bg-white p-6 shadow-[0_28px_90px_rgba(15,23,42,0.08)] sm:p-10">
+          <h2 className="text-3xl font-black text-slate-950">Envíanos un mensaje</h2>
+          <p className="mt-2 text-slate-600">Cuéntanos tu duda y te orientaremos con la mejor opción.</p>
+          <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Nombre</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Email</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Mensaje</label>
+              <textarea
+                value={form.message}
+                onChange={(e) => setForm({ ...form, message: e.target.value })}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+                rows={5}
+                required
+              />
+            </div>
+            <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 font-semibold text-white transition-all hover:bg-slate-800">
+              <Send className="h-5 w-5" />
+              Enviar Mensaje
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
