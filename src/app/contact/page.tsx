@@ -77,7 +77,7 @@ export default function Contact() {
                 <Mail className="mt-1 h-5 w-5 text-cyan-300" />
                 <div>
                   <p className="font-semibold text-white">Email</p>
-                  <p className="text-white/70">info@podomedic.com</p>
+                  <p className="text-white/70">contacto@podologapachuca.com</p>
                 </div>
               </div>
               <div className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">

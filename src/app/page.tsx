@@ -321,7 +321,7 @@ export default function Home() {
                   <span>WhatsApp: {businessPhoneDisplay}</span>
                 </div>
                 <div className="flex items-center">
-                  <span>info@podomedic.com</span>
+                  <span>contacto@podologapachuca.com</span>
                 </div>
                 <div className="flex items-center">
                   <span>Lun-Vie: 11:00 a.m. - 7:00 p.m. | Sáb: 10:00 a.m. - 2:00 p.m.</span>

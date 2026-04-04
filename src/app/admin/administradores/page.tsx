@@ -264,7 +264,7 @@ export default function AdminManagersPage() {
                   value={form.email}
                   onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
                   className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
-                  placeholder="admin@podomedic.com"
+                  placeholder="admin@podologapachuca.com"
                 />
               </label>
 
