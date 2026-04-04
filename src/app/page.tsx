@@ -315,19 +315,15 @@ export default function Home() {
               <h4 className="text-lg font-semibold mb-4">Contacto</h4>
               <div className="space-y-3 text-slate-300">
                 <div className="flex items-center">
-                  <span className="mr-2">📍</span>
                   <span>{businessAddress}, {businessCity}, {businessRegion}</span>
                 </div>
                 <div className="flex items-center">
-                  <span className="mr-2">📞</span>
                   <span>WhatsApp: {businessPhoneDisplay}</span>
                 </div>
                 <div className="flex items-center">
-                  <span className="mr-2">✉️</span>
                   <span>info@podomedic.com</span>
                 </div>
                 <div className="flex items-center">
-                  <span className="mr-2">🕐</span>
                   <span>Lun-Vie: 11:00 a.m. - 7:00 p.m. | Sáb: 10:00 a.m. - 2:00 p.m.</span>
                 </div>
               </div>
