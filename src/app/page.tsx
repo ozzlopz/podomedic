@@ -106,14 +106,10 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl bg-white/6 p-4 text-center">
                   <p className="text-2xl font-black text-white">Lun-Sáb</p>
                   <p className="mt-2 text-[0.7rem] uppercase tracking-[0.16em] text-white/55">Disponibilidad</p>
-                </div>
-                <div className="rounded-2xl bg-white/6 p-4 text-center">
-                  <p className="text-2xl font-black text-white">Cuidado</p>
-                  <p className="mt-2 text-[0.7rem] uppercase tracking-[0.16em] text-white/55">Preventivo</p>
                 </div>
                 <div className="rounded-2xl bg-white/6 p-4 text-center">
                   <p className="text-2xl font-black text-white">100%</p>

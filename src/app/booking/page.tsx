@@ -2,11 +2,68 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Calendar, Clock, User, Mail, MessageSquare, CheckCircle, ArrowRight, ShieldCheck, Stethoscope } from 'lucide-react';
+import { Calendar, Clock, User, Mail, MessageSquare, CheckCircle, ArrowRight, ShieldCheck, Stethoscope, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const dayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] as const;
+const monthLabels = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+] as const;
+
+const weekdayTimeSlots = ['11:00', '12:00', '13:00', '16:00', '17:00', '18:00'] as const;
+const saturdayTimeSlots = ['10:00', '11:00', '12:00', '13:00'] as const;
+
+function formatDateValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function normalizeDate(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
 
 export default function Booking() {
   const [form, setForm] = useState({ name: '', email: '', date: '', time: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
+  const [displayedMonth, setDisplayedMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+
+  const today = normalizeDate(new Date());
+  const monthStart = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth(), 1);
+  const calendarStartOffset = (monthStart.getDay() + 6) % 7;
+  const calendarStart = new Date(monthStart);
+  calendarStart.setDate(monthStart.getDate() - calendarStartOffset);
+
+  const selectedDate = form.date ? normalizeDate(new Date(`${form.date}T00:00:00`)) : null;
+  const selectedDay = selectedDate?.getDay();
+  const availableTimeSlots =
+    selectedDay === 6 ? saturdayTimeSlots : selectedDay === 0 || !selectedDate ? [] : weekdayTimeSlots;
+
+  const calendarDays = Array.from({ length: 35 }, (_, index) => {
+    const date = new Date(calendarStart);
+    date.setDate(calendarStart.getDate() + index);
+    return date;
+  });
+
+  const handleDateSelect = (date: Date) => {
+    const nextDate = formatDateValue(date);
+    setForm((current) => ({
+      ...current,
+      date: nextDate,
+      time: current.date === nextDate ? current.time : '',
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,32 +182,155 @@ export default function Booking() {
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <Calendar className="h-4 w-4" />
-                    Fecha Preferida
-                  </label>
-                  <input
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
-                    required
-                  />
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                <input type="hidden" value={form.date} required readOnly name="preferredDate" />
+                <input type="hidden" value={form.time} required readOnly name="preferredTime" />
+                <div className="rounded-[2rem] border border-slate-200 bg-slate-50/70 p-5">
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <Calendar className="h-4 w-4" />
+                        Fecha Preferida
+                      </label>
+                      <p className="mt-1 text-sm text-slate-500">Selecciona un día disponible para tu consulta.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDisplayedMonth(
+                            (current) => new Date(current.getFullYear(), current.getMonth() - 1, 1)
+                          )
+                        }
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-cyan-200 hover:text-cyan-700"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDisplayedMonth(
+                            (current) => new Date(current.getFullYear(), current.getMonth() + 1, 1)
+                          )
+                        }
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-cyan-200 hover:text-cyan-700"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.5rem] border border-white bg-white p-4 shadow-sm">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-lg font-bold text-slate-950">
+                        {monthLabels[displayedMonth.getMonth()]} {displayedMonth.getFullYear()}
+                      </p>
+                      {selectedDate && (
+                        <p className="text-sm font-medium text-cyan-700">
+                          {selectedDate.toLocaleDateString('es-MX', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                          })}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      {dayLabels.map((label) => (
+                        <span key={label}>{label}</span>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-7 gap-2">
+                      {calendarDays.map((date) => {
+                        const normalizedDate = normalizeDate(date);
+                        const isCurrentMonth = date.getMonth() === displayedMonth.getMonth();
+                        const isPast = normalizedDate < today;
+                        const isSunday = date.getDay() === 0;
+                        const isDisabled = !isCurrentMonth || isPast || isSunday;
+                        const isSelected =
+                          selectedDate && normalizedDate.getTime() === selectedDate.getTime();
+
+                        return (
+                          <button
+                            key={date.toISOString()}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => handleDateSelect(date)}
+                            className={`aspect-square rounded-2xl text-sm font-semibold transition ${
+                              isSelected
+                                ? 'bg-slate-950 text-white shadow-lg shadow-slate-950/15'
+                                : isDisabled
+                                  ? 'cursor-not-allowed bg-slate-100/60 text-slate-300'
+                                  : 'bg-slate-50 text-slate-700 hover:bg-cyan-50 hover:text-cyan-700'
+                            }`}
+                          >
+                            {date.getDate()}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+
+                <div className="rounded-[2rem] border border-slate-200 bg-slate-50/70 p-5">
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                     <Clock className="h-4 w-4" />
                     Hora Preferida
                   </label>
-                  <input
-                    type="time"
-                    value={form.time}
-                    onChange={(e) => setForm({ ...form, time: e.target.value })}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
-                    required
-                  />
+                  <p className="mt-1 text-sm text-slate-500">
+                    {selectedDate
+                      ? 'Elige un horario sugerido y te confirmaremos disponibilidad.'
+                      : 'Primero selecciona una fecha para ver horarios.'}
+                  </p>
+
+                  <div className="mt-5 rounded-[1.5rem] border border-white bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="text-lg font-bold text-slate-950">Horarios disponibles</p>
+                      {selectedDate && (
+                        <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-700">
+                          {selectedDay === 6 ? 'Sábado' : 'Lun-Vie'}
+                        </span>
+                      )}
+                    </div>
+
+                    {selectedDate ? (
+                      availableTimeSlots.length > 0 ? (
+                        <div className="mt-5 grid grid-cols-2 gap-3">
+                          {availableTimeSlots.map((slot) => {
+                            const isSelected = form.time === slot;
+                            return (
+                              <button
+                                key={slot}
+                                type="button"
+                                onClick={() => setForm((current) => ({ ...current, time: slot }))}
+                                className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                                  isSelected
+                                    ? 'border-slate-950 bg-slate-950 text-white shadow-lg shadow-slate-950/15'
+                                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700'
+                                }`}
+                              >
+                                {slot}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                          No hay horarios configurados para ese día.
+                        </div>
+                      )
+                    ) : (
+                      <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                        Selecciona una fecha para habilitar el picker de hora.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 rounded-2xl bg-slate-950 px-4 py-3 text-sm text-white/80">
+                    Horario del consultorio: lunes a viernes de 11:00 a.m. a 7:00 p.m. y sábados de 10:00 a.m. a 2:00 p.m.
+                  </div>
                 </div>
               </div>
 

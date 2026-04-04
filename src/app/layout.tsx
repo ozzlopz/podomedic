@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import AuthProviderWrapper from "@/components/AuthProviderWrapper";
 import Navigation from "@/components/Navigation";
+import WhatsAppButton from "@/components/WhatsAppButton";
 
 export const metadata: Metadata = {
   title: "Podomedic",
@@ -21,6 +22,7 @@ export default function RootLayout({
           <main className="flex-1 pt-24 sm:pt-28">
             {children}
           </main>
+          <WhatsAppButton />
         </AuthProviderWrapper>
       </body>
     </html>
