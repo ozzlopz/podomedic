@@ -3,6 +3,7 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { randomBytes } from "node:crypto";
+import { getTimeSlotsForDate, isValidTimeSlot, SLOT_DURATION_MINUTES } from "./booking";
 
 initializeApp();
 
@@ -35,6 +36,65 @@ function splitName(fullName: string) {
 
 function createTemporaryPassword() {
   return randomBytes(18).toString("base64url");
+}
+
+function getDayBounds(dateValue: string) {
+  const start = new Date(`${dateValue}T00:00:00`);
+  const end = new Date(`${dateValue}T23:59:59`);
+
+  return { start, end };
+}
+
+function formatTimeFromDate(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+async function assertSlotAvailable(params: {
+  date: string;
+  time: string;
+  excludeAppointmentId?: string;
+}) {
+  const db = getFirestore();
+  const { start, end } = getDayBounds(params.date);
+
+  if (!isValidTimeSlot(params.date, params.time)) {
+    throw new HttpsError("invalid-argument", "La hora seleccionada no pertenece a un bloque disponible de 90 minutos.");
+  }
+
+  const [appointmentsSnapshot, blockedSlotsSnapshot] = await Promise.all([
+    db.collection("appointments")
+      .where("scheduledAt", ">=", start)
+      .where("scheduledAt", "<=", end)
+      .get(),
+    db.collection("appointment_blocks")
+      .where("date", "==", params.date)
+      .where("time", "==", params.time)
+      .get(),
+  ]);
+
+  const conflictingAppointment = appointmentsSnapshot.docs.find((docItem) => {
+    if (params.excludeAppointmentId && docItem.id === params.excludeAppointmentId) {
+      return false;
+    }
+
+    const data = docItem.data();
+    const scheduledTime =
+      typeof data?.scheduledTime === "string"
+        ? data.scheduledTime
+        : data?.scheduledAt?.toDate
+          ? formatTimeFromDate(data.scheduledAt.toDate())
+          : "";
+
+    return data?.status !== "cancelled" && scheduledTime === params.time;
+  });
+
+  if (conflictingAppointment) {
+    throw new HttpsError("already-exists", "Ese horario ya fue reservado.");
+  }
+
+  if (!blockedSlotsSnapshot.empty) {
+    throw new HttpsError("failed-precondition", "Ese horario fue bloqueado por administración.");
+  }
 }
 
 async function findOrCreatePatientProfile(params: {
@@ -330,6 +390,8 @@ export const createBookingAppointment = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "Nombre, correo, fecha y hora son obligatorios.");
   }
 
+  await assertSlotAvailable({ date, time });
+
   const db = getFirestore();
   const patient = await findOrCreatePatientProfile({
     email,
@@ -348,11 +410,14 @@ export const createBookingAppointment = onCall(async (request) => {
     patientName: name.trim(),
     patientEmail: email.trim().toLowerCase(),
     patientPhone: "",
+    scheduledDate: date,
+    scheduledTime: time,
     scheduledAt,
     reason: message?.trim() || "Solicitud desde formulario público",
     notes: message?.trim() || "",
     status: "pending",
     source: "booking",
+    slotDurationMinutes: SLOT_DURATION_MINUTES,
     createdAt: FieldValue.serverTimestamp(),
   });
 
@@ -395,6 +460,8 @@ export const createAdminAppointment = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "Paciente, fecha, hora y motivo son obligatorios.");
   }
 
+  await assertSlotAvailable({ date, time });
+
   const db = getFirestore();
   const userSnapshot = await db.collection("users").doc(patientId).get();
 
@@ -418,17 +485,138 @@ export const createAdminAppointment = onCall(async (request) => {
       "Paciente",
     patientEmail: patientEmail?.trim().toLowerCase() || userData?.email || "",
     patientPhone: userData?.phone ?? "",
+    scheduledDate: date,
+    scheduledTime: time,
     scheduledAt,
     reason: reason.trim(),
     notes: notes?.trim() || "",
     status: status ?? "confirmed",
     source: "admin",
+    slotDurationMinutes: SLOT_DURATION_MINUTES,
     createdAt: FieldValue.serverTimestamp(),
   });
 
   return {
     appointmentId: appointmentRef.id,
     message: "Cita creada correctamente.",
+  };
+});
+
+export const getBookingAvailability = onCall(async (request) => {
+  const { date } = request.data as { date?: string };
+
+  if (!date) {
+    throw new HttpsError("invalid-argument", "Debes indicar una fecha.");
+  }
+
+  const slots: string[] = getTimeSlotsForDate(date);
+
+  if (slots.length === 0) {
+    return {
+      date,
+      slotDurationMinutes: SLOT_DURATION_MINUTES,
+      slots,
+      availableSlots: [] as string[],
+      occupiedSlots: [] as string[],
+      blockedSlots: [] as string[],
+    };
+  }
+
+  const db = getFirestore();
+  const { start, end } = getDayBounds(date);
+  const [appointmentsSnapshot, blockedSlotsSnapshot] = await Promise.all([
+    db.collection("appointments")
+      .where("scheduledAt", ">=", start)
+      .where("scheduledAt", "<=", end)
+      .get(),
+    db.collection("appointment_blocks")
+      .where("date", "==", date)
+      .get(),
+  ]);
+
+  const occupiedSlots = new Set(
+    appointmentsSnapshot.docs
+      .filter((docItem) => docItem.data()?.status !== "cancelled")
+      .map((docItem) => {
+        const data = docItem.data();
+        return typeof data?.scheduledTime === "string"
+          ? data.scheduledTime
+          : data?.scheduledAt?.toDate
+            ? formatTimeFromDate(data.scheduledAt.toDate())
+            : "";
+      })
+      .filter((timeValue): timeValue is string => Boolean(timeValue)),
+  );
+
+  const blockedSlots = new Set(
+    blockedSlotsSnapshot.docs
+      .map((docItem) => docItem.data()?.time)
+      .filter((timeValue): timeValue is string => Boolean(timeValue)),
+  );
+
+  return {
+    date,
+    slotDurationMinutes: SLOT_DURATION_MINUTES,
+    slots,
+    availableSlots: slots.filter((slot) => !occupiedSlots.has(slot) && !blockedSlots.has(slot)),
+    occupiedSlots: slots.filter((slot) => occupiedSlots.has(slot)),
+    blockedSlots: slots.filter((slot) => blockedSlots.has(slot)),
+  };
+});
+
+export const createAppointmentBlock = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesión para bloquear horarios.");
+  }
+
+  await assertAdmin(request.auth.uid);
+
+  const { date, time, reason } = request.data as {
+    date?: string;
+    time?: string;
+    reason?: string;
+  };
+
+  if (!date || !time) {
+    throw new HttpsError("invalid-argument", "Fecha y hora son obligatorias.");
+  }
+
+  await assertSlotAvailable({ date, time });
+
+  const db = getFirestore();
+  const blockRef = await db.collection("appointment_blocks").add({
+    date,
+    time,
+    reason: reason?.trim() || "",
+    createdBy: request.auth.uid,
+    slotDurationMinutes: SLOT_DURATION_MINUTES,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    blockId: blockRef.id,
+    message: "Horario bloqueado correctamente.",
+  };
+});
+
+export const removeAppointmentBlock = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesión para desbloquear horarios.");
+  }
+
+  await assertAdmin(request.auth.uid);
+
+  const { blockId } = request.data as { blockId?: string };
+
+  if (!blockId) {
+    throw new HttpsError("invalid-argument", "Debes indicar el bloque a eliminar.");
+  }
+
+  const db = getFirestore();
+  await db.collection("appointment_blocks").doc(blockId).delete();
+
+  return {
+    message: "Horario desbloqueado correctamente.",
   };
 });
 

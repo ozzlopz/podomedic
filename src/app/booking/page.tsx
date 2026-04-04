@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { Calendar, Clock, User, Mail, MessageSquare, CheckCircle, ArrowRight, ShieldCheck, Stethoscope, ChevronLeft, ChevronRight } from 'lucide-react';
 import { functions } from '@/lib/firebase';
+import { formatDateValue, getTimeSlotsForDay, normalizeDateValue } from '@/lib/booking';
 
 const dayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] as const;
 const monthLabels = [
@@ -22,37 +23,36 @@ const monthLabels = [
   'Diciembre',
 ] as const;
 
-const weekdayTimeSlots = ['11:00', '12:00', '13:00', '16:00', '17:00', '18:00'] as const;
-const saturdayTimeSlots = ['10:00', '11:00', '12:00', '13:00'] as const;
-
-function formatDateValue(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function normalizeDate(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
+type AvailabilityResponse = {
+  availableSlots: string[];
+  blockedSlots: string[];
+  occupiedSlots: string[];
+  slotDurationMinutes: number;
+};
 
 export default function Booking() {
   const [form, setForm] = useState({ name: '', email: '', date: '', time: '', message: '', acceptedPolicies: true });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState('');
   const [displayedMonth, setDisplayedMonth] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
 
-  const today = normalizeDate(new Date());
+  const today = normalizeDateValue(new Date());
   const monthStart = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth(), 1);
   const calendarStartOffset = (monthStart.getDay() + 6) % 7;
   const calendarStart = new Date(monthStart);
   calendarStart.setDate(monthStart.getDate() - calendarStartOffset);
 
-  const selectedDate = form.date ? normalizeDate(new Date(`${form.date}T00:00:00`)) : null;
+  const selectedDate = form.date ? normalizeDateValue(new Date(`${form.date}T00:00:00`)) : null;
   const selectedDay = selectedDate?.getDay();
-  const availableTimeSlots =
-    selectedDay === 6 ? saturdayTimeSlots : selectedDay === 0 || !selectedDate ? [] : weekdayTimeSlots;
+  const availableTimeSlots = availability?.availableSlots ?? [];
+  const allTimeSlots = useMemo(() => (selectedDate ? getTimeSlotsForDay(selectedDate.getDay()) : []), [selectedDate]);
 
   const calendarDays = Array.from({ length: 35 }, (_, index) => {
     const date = new Date(calendarStart);
@@ -68,6 +68,65 @@ export default function Booking() {
       time: current.date === nextDate ? current.time : '',
     }));
   };
+
+  useEffect(() => {
+    if (!form.date) {
+      setAvailability(null);
+      setAvailabilityError('');
+      return;
+    }
+
+    if (!functions) {
+      setAvailability(null);
+      setAvailabilityError('No se pudo consultar la disponibilidad.');
+      return;
+    }
+
+    const currentFunctions = functions;
+
+    let isActive = true;
+
+    const loadAvailability = async () => {
+      setAvailabilityLoading(true);
+      setAvailabilityError('');
+
+      try {
+        const getAvailability = httpsCallable<{ date: string }, AvailabilityResponse>(
+          currentFunctions,
+          'getBookingAvailability',
+        );
+        const response = await getAvailability({ date: form.date });
+
+        if (!isActive) return;
+
+        setAvailability(response.data);
+        setForm((current) =>
+          current.time && !response.data.availableSlots.includes(current.time)
+            ? { ...current, time: '' }
+            : current,
+        );
+      } catch (availabilityLoadError) {
+        if (!isActive) return;
+
+        setAvailability(null);
+        setAvailabilityError(
+          availabilityLoadError instanceof Error
+            ? availabilityLoadError.message
+            : 'No fue posible consultar la disponibilidad.',
+        );
+      } finally {
+        if (isActive) {
+          setAvailabilityLoading(false);
+        }
+      }
+    };
+
+    void loadAvailability();
+
+    return () => {
+      isActive = false;
+    };
+  }, [form.date]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -272,7 +331,7 @@ export default function Booking() {
 
                     <div className="mt-3 grid grid-cols-7 gap-2">
                       {calendarDays.map((date) => {
-                        const normalizedDate = normalizeDate(date);
+                        const normalizedDate = normalizeDateValue(date);
                         const isCurrentMonth = date.getMonth() === displayedMonth.getMonth();
                         const isPast = normalizedDate < today;
                         const isSunday = date.getDay() === 0;
@@ -324,22 +383,41 @@ export default function Booking() {
                     </div>
 
                     {selectedDate ? (
-                      availableTimeSlots.length > 0 ? (
+                      availabilityLoading ? (
+                        <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                          Consultando disponibilidad...
+                        </div>
+                      ) : availabilityError ? (
+                        <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+                          {availabilityError}
+                        </div>
+                      ) : allTimeSlots.length > 0 ? (
                         <div className="mt-5 grid grid-cols-2 gap-3">
-                          {availableTimeSlots.map((slot) => {
+                          {allTimeSlots.map((slot) => {
                             const isSelected = form.time === slot;
+                            const isAvailable = availableTimeSlots.includes(slot);
+                            const isBlocked = availability?.blockedSlots.includes(slot);
+                            const isOccupied = availability?.occupiedSlots.includes(slot);
                             return (
                               <button
                                 key={slot}
                                 type="button"
+                                disabled={!isAvailable}
                                 onClick={() => setForm((current) => ({ ...current, time: slot }))}
                                 className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
                                   isSelected
                                     ? 'border-slate-950 bg-slate-950 text-white shadow-lg shadow-slate-950/15'
-                                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700'
+                                    : !isAvailable
+                                      ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700'
                                 }`}
                               >
-                                {slot}
+                                <span className="block">{slot}</span>
+                                {!isAvailable && (
+                                  <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
+                                    {isBlocked ? 'Bloqueado' : isOccupied ? 'Reservado' : 'No disponible'}
+                                  </span>
+                                )}
                               </button>
                             );
                           })}
@@ -357,7 +435,7 @@ export default function Booking() {
                   </div>
 
                   <div className="mt-4 rounded-2xl bg-slate-950 px-4 py-3 text-sm text-white/80">
-                    Horario del consultorio: lunes a viernes de 11:00 a.m. a 7:00 p.m. y sábados de 10:00 a.m. a 2:00 p.m.
+                    Bloques de cita de 90 minutos. Horario del consultorio: lunes a viernes de 11:00 a.m. a 7:00 p.m. y sábados de 10:00 a.m. a 2:00 p.m.
                   </div>
                 </div>
               </div>
