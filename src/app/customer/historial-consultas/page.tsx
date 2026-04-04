@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { CalendarCheck2, FileText, Stethoscope } from 'lucide-react';
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
@@ -8,8 +9,6 @@ import { db } from '@/lib/firebase';
 
 type ConsultationEntry = {
   id: string;
-  reason?: string;
-  notes?: string;
   status?: string;
   consultationDate?: { seconds?: number };
 };
@@ -50,9 +49,9 @@ export default function CustomerConsultationsHistoryPage() {
         <span className="inline-flex rounded-full border border-cyan-100 bg-white/80 px-4 py-2 text-sm font-semibold uppercase tracking-[0.24em] text-cyan-700 shadow-sm backdrop-blur-sm">
           Historial de consultas
         </span>
-        <h1 className="mt-6 text-4xl font-black text-slate-950 sm:text-5xl">Resumen de tu atención clínica</h1>
+        <h1 className="mt-6 text-4xl font-black text-slate-950 sm:text-5xl">Fechas de tus consultas</h1>
         <p className="mt-4 max-w-3xl text-lg text-slate-600">
-          Consulta tus visitas anteriores, motivos de atención y notas clínicas registradas en tu expediente.
+          Consulta únicamente las fechas registradas de atención y el estado asociado a cada consulta.
         </p>
       </section>
 
@@ -72,9 +71,16 @@ export default function CustomerConsultationsHistoryPage() {
         <div className="rounded-[2rem] border border-white/70 bg-white/80 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
           <FileText className="h-7 w-7 text-teal-600" />
           <p className="mt-4 text-3xl font-black text-slate-950">
-            {loading ? '...' : consultations[0]?.reason ?? 'Sin datos'}
+            {loading
+              ? '...'
+              : consultations[0]?.consultationDate?.seconds
+                ? new Date(consultations[0].consultationDate.seconds * 1000).toLocaleDateString('es-MX', {
+                    day: 'numeric',
+                    month: 'short',
+                  })
+                : 'Sin datos'}
           </p>
-          <p className="mt-1 text-sm text-slate-600">Último motivo de consulta</p>
+          <p className="mt-1 text-sm text-slate-600">Última fecha registrada</p>
         </div>
       </section>
 
@@ -91,10 +97,14 @@ export default function CustomerConsultationsHistoryPage() {
             </div>
           ) : (
             consultations.map((consultation) => (
-              <div key={consultation.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <Link
+                key={consultation.id}
+                href={`/customer/historial-consultas/${consultation.id}`}
+                className="block rounded-3xl border border-slate-200 bg-slate-50 p-5 transition hover:border-cyan-200 hover:bg-cyan-50/40"
+              >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-lg font-bold text-slate-950">{consultation.reason ?? 'Consulta médica'}</p>
+                    <p className="text-lg font-bold text-slate-950">Consulta registrada</p>
                     <p className="text-sm text-slate-600">
                       {consultation.consultationDate?.seconds
                         ? new Date(consultation.consultationDate.seconds * 1000).toLocaleDateString('es-MX', {
@@ -104,15 +114,13 @@ export default function CustomerConsultationsHistoryPage() {
                           })
                         : 'Sin fecha registrada'}
                     </p>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                      {consultation.notes ?? 'Sin notas clínicas registradas.'}
-                    </p>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-500">Toca para ver la fecha y el estado de esta consulta.</p>
                   </div>
                   <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-700">
                     {consultation.status ?? 'consulta'}
                   </span>
                 </div>
-              </div>
+              </Link>
             ))
           )}
         </div>

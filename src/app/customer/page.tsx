@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
-import { CalendarClock, FileText, Mail, TrendingUp, UserRound } from 'lucide-react';
+import { CalendarClock, CalendarDays, FileText, Mail, TrendingUp, UserRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 
@@ -17,15 +17,21 @@ type LevelEntry = {
 
 type ConsultationEntry = {
   id: string;
-  reason?: string;
-  notes?: string;
+  status?: string;
   consultationDate?: { seconds?: number };
+};
+
+type AppointmentEntry = {
+  id: string;
+  status?: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  scheduledAt?: { seconds?: number };
 };
 
 export default function Customer() {
   const { user, profile } = useAuth();
   const [levels, setLevels] = useState<LevelEntry[]>([]);
   const [consultations, setConsultations] = useState<ConsultationEntry[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,7 +42,7 @@ export default function Customer() {
       }
 
       try {
-        const [levelsSnapshot, consultationsSnapshot] = await Promise.all([
+        const [levelsSnapshot, consultationsSnapshot, appointmentsSnapshot] = await Promise.all([
           getDocs(
             query(
               collection(db, 'health_levels'),
@@ -53,6 +59,14 @@ export default function Customer() {
               limit(3),
             ),
           ),
+          getDocs(
+            query(
+              collection(db, 'appointments'),
+              where('userId', '==', user.uid),
+              orderBy('scheduledAt', 'asc'),
+              limit(4),
+            ),
+          ),
         ]);
 
         setLevels(
@@ -67,6 +81,12 @@ export default function Customer() {
             ...docItem.data(),
           })) as ConsultationEntry[],
         );
+        setAppointments(
+          appointmentsSnapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data(),
+          })) as AppointmentEntry[],
+        );
       } finally {
         setLoading(false);
       }
@@ -76,22 +96,16 @@ export default function Customer() {
   }, [user]);
 
   const lastLevel = levels[0];
-  const lastConsultation = consultations[0];
+  const nextAppointment = appointments.find((appointment) => {
+    if (!appointment.scheduledAt?.seconds) return false;
+    return appointment.scheduledAt.seconds * 1000 >= Date.now();
+  });
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ');
 
-  const latestLevelLabel = useMemo(() => {
-    if (!lastLevel?.metric || !lastLevel?.value) return 'Sin registros todavía';
-    return `${lastLevel.metric}: ${lastLevel.value}${lastLevel.unit ? ` ${lastLevel.unit}` : ''}`;
-  }, [lastLevel]);
-
-  const latestConsultationDate =
-    lastConsultation?.consultationDate?.seconds
-      ? new Date(lastConsultation.consultationDate.seconds * 1000).toLocaleDateString('es-MX', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-        })
-      : 'Sin consultas registradas';
+  const nextAppointmentDate =
+    nextAppointment?.scheduledAt?.seconds
+      ? new Date(nextAppointment.scheduledAt.seconds * 1000).toLocaleString('es-MX')
+      : 'Sin citas próximas';
 
   return (
     <div className="space-y-8">
@@ -103,11 +117,19 @@ export default function Customer() {
           {fullName ? `Bienvenido, ${fullName}` : 'Tu espacio personal en PodoMedic'}
         </h1>
         <p className="mt-4 max-w-2xl text-lg text-slate-600">
-          Consulta tu seguimiento real, revisa tus consultas recientes y mantén a la mano tus niveles registrados.
+          Consulta tus próximas fechas, revisa tu historial disponible y mantén a la mano tu información personal.
         </p>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Link
+          href="/customer/citas"
+          className="rounded-3xl border border-white/70 bg-white/80 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan-200"
+        >
+          <CalendarDays className="h-7 w-7 text-cyan-600" />
+          <p className="mt-4 text-lg font-black text-slate-950">{loading ? '...' : appointments.length}</p>
+          <p className="mt-1 text-sm text-slate-600">Citas visibles en tu cuenta.</p>
+        </Link>
         <Link
           href="/customer/registrar-niveles"
           className="rounded-3xl border border-white/70 bg-white/80 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan-200"
@@ -130,7 +152,15 @@ export default function Customer() {
         >
           <FileText className="h-7 w-7 text-teal-600" />
           <p className="mt-4 text-lg font-black text-slate-950">{loading ? '...' : consultations.length}</p>
-          <p className="mt-1 text-sm text-slate-600">Consultas registradas visibles para ti.</p>
+          <p className="mt-1 text-sm text-slate-600">Fechas de consultas registradas para ti.</p>
+        </Link>
+        <Link
+          href="/customer/perfil"
+          className="rounded-3xl border border-white/70 bg-white/80 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan-200"
+        >
+          <UserRound className="h-7 w-7 text-indigo-600" />
+          <p className="mt-4 text-lg font-black text-slate-950">Mi perfil</p>
+          <p className="mt-1 text-sm text-slate-600">Revisa tu nombre, correo y teléfono registrados.</p>
         </Link>
       </section>
 
@@ -145,28 +175,36 @@ export default function Customer() {
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
               <CalendarClock className="h-5 w-5 text-cyan-300" />
-              <p className="mt-4 text-sm uppercase tracking-[0.2em] text-white/45">Última consulta</p>
-              <p className="mt-2 text-lg font-semibold text-white">{latestConsultationDate}</p>
+              <p className="mt-4 text-sm uppercase tracking-[0.2em] text-white/45">Próxima cita</p>
+              <p className="mt-2 text-lg font-semibold text-white">{nextAppointmentDate}</p>
             </div>
           </div>
         </div>
 
         <div className="grid gap-6">
           <div className="rounded-[2rem] border border-slate-200/80 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-            <h2 className="text-2xl font-black text-slate-950">Último nivel registrado</h2>
-            <p className="mt-2 text-slate-600">Consulta rápido el registro más reciente capturado desde tu panel.</p>
+            <h2 className="text-2xl font-black text-slate-950">Último registro de niveles</h2>
+            <p className="mt-2 text-slate-600">Aquí solo mostramos la fecha de tu última captura, sin resumir datos clínicos.</p>
             <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-lg font-bold text-slate-950">{latestLevelLabel}</p>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="text-lg font-bold text-slate-950">
                 {lastLevel?.recordedAt?.seconds
                   ? new Date(lastLevel.recordedAt.seconds * 1000).toLocaleString('es-MX')
-                  : 'Cuando registres datos aquí aparecerá tu última captura.'}
+                  : 'Sin registros todavía'}
               </p>
+              <p className="mt-2 text-sm text-slate-500">Si quieres revisar el detalle completo, entra a tu historial de niveles.</p>
             </div>
           </div>
 
           <div className="rounded-[2rem] border border-slate-200/80 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-            <h2 className="text-2xl font-black text-slate-950">Consultas recientes</h2>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-black text-slate-950">Fechas de consultas</h2>
+                <p className="mt-2 text-slate-600">Visualiza únicamente las fechas registradas de tus consultas.</p>
+              </div>
+              <Link href="/customer/historial-consultas" className="text-sm font-semibold text-cyan-700 hover:text-cyan-600">
+                Ver historial
+              </Link>
+            </div>
             <div className="mt-6 space-y-4">
               {consultations.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-slate-500">
@@ -174,8 +212,12 @@ export default function Customer() {
                 </div>
               ) : (
                 consultations.map((consultation) => (
-                  <div key={consultation.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                    <p className="text-lg font-bold text-slate-950">{consultation.reason ?? 'Consulta médica'}</p>
+                  <Link
+                    key={consultation.id}
+                    href={`/customer/historial-consultas/${consultation.id}`}
+                    className="block rounded-3xl border border-slate-200 bg-slate-50 p-5 transition hover:border-cyan-200 hover:bg-cyan-50/40"
+                  >
+                    <p className="text-lg font-bold text-slate-950">Consulta registrada</p>
                     <p className="mt-1 text-sm text-slate-500">
                       {consultation.consultationDate?.seconds
                         ? new Date(consultation.consultationDate.seconds * 1000).toLocaleDateString('es-MX', {
@@ -185,10 +227,8 @@ export default function Customer() {
                           })
                         : 'Sin fecha registrada'}
                     </p>
-                    <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                      {consultation.notes ?? 'Sin notas clínicas registradas.'}
-                    </p>
-                  </div>
+                    <p className="mt-3 text-sm leading-relaxed text-slate-600">Abre el detalle para ver el estado y la fecha completa.</p>
+                  </Link>
                 ))
               )}
             </div>

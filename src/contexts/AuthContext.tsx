@@ -12,6 +12,7 @@ interface AuthContextType {
     first_name?: string;
     last_name?: string;
     email?: string;
+    phone?: string;
     admin_type?: 'superadmin' | 'admin';
     status?: 'active' | 'inactive';
   } | null;
@@ -29,6 +30,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     first_name?: string;
     last_name?: string;
     email?: string;
+    phone?: string;
     admin_type?: 'superadmin' | 'admin';
     status?: 'active' | 'inactive';
   } | null>(null);
@@ -48,6 +50,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               first_name: data.first_name,
               last_name: data.last_name,
               email: data.email ?? user.email ?? undefined,
+              phone: data.phone ?? undefined,
               admin_type: data.admin_type,
               status: data.status,
             });

@@ -15,6 +15,7 @@ import {
   Activity,
   History,
   ClipboardPlus,
+  UserCircle2,
   Stethoscope,
   LogOut,
   PanelLeftClose,
@@ -41,10 +42,12 @@ const adminNavItems = [
 ] as const;
 
 const customerNavItems = [
-  { href: '/customer', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/customer', label: 'Inicio', icon: LayoutDashboard },
+  { href: '/customer/citas', label: 'Mis citas', icon: CalendarDays },
   { href: '/customer/registrar-niveles', label: 'Registrar niveles', icon: ClipboardPlus },
   { href: '/customer/historial-niveles', label: 'Historial de niveles', icon: Activity },
   { href: '/customer/historial-consultas', label: 'Historial de consultas', icon: History },
+  { href: '/customer/perfil', label: 'Mi perfil', icon: UserCircle2 },
 ] as const;
 
 export default function DashboardShell({ role, children }: DashboardShellProps) {
