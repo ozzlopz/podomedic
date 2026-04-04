@@ -340,15 +340,21 @@ export default function Home() {
                 © 2024 PodoMedic. Todos los derechos reservados.
               </p>
               <div className="flex flex-wrap justify-center gap-6 md:justify-end">
-                <span className="text-sm text-slate-400 transition-colors hover:text-teal-300">
+                <Link
+                  href="/aviso-de-privacidad"
+                  className="text-sm text-slate-400 transition-colors hover:text-teal-300"
+                >
                   Política de Privacidad
-                </span>
-                <span className="text-sm text-slate-400 transition-colors hover:text-teal-300">
-                  Términos de Servicio
-                </span>
-                <span className="text-sm text-slate-400 transition-colors hover:text-teal-300">
+                </Link>
+                <Link
+                  href="/terminos-y-condiciones"
+                  className="text-sm text-slate-400 transition-colors hover:text-teal-300"
+                >
+                  Términos y Condiciones
+                </Link>
+                <Link href="/contact" className="text-sm text-slate-400 transition-colors hover:text-teal-300">
                   Contacto
-                </span>
+                </Link>
               </div>
             </div>
           </div>

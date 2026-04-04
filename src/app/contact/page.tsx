@@ -12,7 +12,7 @@ export default function Contact() {
         ? new URLSearchParams(window.location.search).get('message') ?? ''
         : '';
 
-    return { name: '', email: '', message: prefilledMessage };
+    return { name: '', email: '', message: prefilledMessage, acceptedPolicies: true };
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -137,6 +137,26 @@ export default function Contact() {
                 required
               />
             </div>
+            <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={form.acceptedPolicies}
+                onChange={(e) => setForm({ ...form, acceptedPolicies: e.target.checked })}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                required
+              />
+              <span>
+                He leído y acepto el{' '}
+                <Link href="/aviso-de-privacidad" className="font-semibold text-cyan-700 transition-colors hover:text-cyan-600">
+                  Aviso de Privacidad
+                </Link>{' '}
+                y los{' '}
+                <Link href="/terminos-y-condiciones" className="font-semibold text-cyan-700 transition-colors hover:text-cyan-600">
+                  Términos y Condiciones
+                </Link>
+                .
+              </span>
+            </label>
             <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 font-semibold text-white transition-all hover:bg-slate-800">
               <Send className="h-5 w-5" />
               Enviar Mensaje

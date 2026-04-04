@@ -34,7 +34,7 @@ function normalizeDate(date: Date) {
 }
 
 export default function Booking() {
-  const [form, setForm] = useState({ name: '', email: '', date: '', time: '', message: '' });
+  const [form, setForm] = useState({ name: '', email: '', date: '', time: '', message: '', acceptedPolicies: true });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -82,7 +82,13 @@ export default function Booking() {
 
     try {
       const createAppointment = httpsCallable(functions, 'createBookingAppointment');
-      await createAppointment(form);
+      await createAppointment({
+        name: form.name,
+        email: form.email,
+        date: form.date,
+        time: form.time,
+        message: form.message,
+      });
       setSubmitted(true);
     } catch (submitError) {
       const message =
@@ -369,6 +375,27 @@ export default function Booking() {
                   placeholder="Describe brevemente tu problema o consulta..."
                 />
               </div>
+
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={form.acceptedPolicies}
+                  onChange={(e) => setForm({ ...form, acceptedPolicies: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                  required
+                />
+                <span>
+                  He leído y acepto el{' '}
+                  <Link href="/aviso-de-privacidad" className="font-semibold text-cyan-700 transition-colors hover:text-cyan-600">
+                    Aviso de Privacidad
+                  </Link>{' '}
+                  y los{' '}
+                  <Link href="/terminos-y-condiciones" className="font-semibold text-cyan-700 transition-colors hover:text-cyan-600">
+                    Términos y Condiciones
+                  </Link>
+                  .
+                </span>
+              </label>
 
               {error && (
                 <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
