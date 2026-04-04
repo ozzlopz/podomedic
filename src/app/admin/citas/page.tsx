@@ -461,104 +461,6 @@ export default function AdminAppointmentsPage() {
 
         <div className="space-y-6">
           <section className="rounded-[2rem] border border-slate-200/80 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-            <h2 className="text-2xl font-black text-slate-950">Horario semanal</h2>
-            <p className="mt-2 text-slate-600">
-              Ajusta apertura y cierre por día. Si activas domingo, el booking público también podrá ofrecer citas ese día.
-            </p>
-
-            <form onSubmit={handleSaveSchedule} className="mt-8 space-y-4">
-              {Object.entries(schedule).map(([dayKey, dayConfig]) => (
-                <div
-                  key={dayKey}
-                  className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)] lg:items-center"
-                >
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={dayConfig.enabled}
-                      onChange={(event) =>
-                        setSchedule((current) => ({
-                          ...current,
-                          [dayKey]: {
-                            ...current[dayKey],
-                            enabled: event.target.checked,
-                          },
-                        }))
-                      }
-                      className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
-                    />
-                    <span className="font-semibold text-slate-900">{dayLabelsByKey[dayKey]}</span>
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-semibold text-slate-700">Apertura</span>
-                    <input
-                      type="time"
-                      value={dayConfig.openTime}
-                      disabled={!dayConfig.enabled}
-                      onChange={(event) =>
-                        setSchedule((current) => ({
-                          ...current,
-                          [dayKey]: {
-                            ...current[dayKey],
-                            openTime: event.target.value,
-                          },
-                        }))
-                      }
-                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-semibold text-slate-700">Cierre</span>
-                    <input
-                      type="time"
-                      value={dayConfig.closeTime}
-                      disabled={!dayConfig.enabled}
-                      onChange={(event) =>
-                        setSchedule((current) => ({
-                          ...current,
-                          [dayKey]: {
-                            ...current[dayKey],
-                            closeTime: event.target.value,
-                          },
-                        }))
-                      }
-                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-                    />
-                  </label>
-                </div>
-              ))}
-
-              {scheduleLoading && (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                  Cargando horario semanal...
-                </div>
-              )}
-
-              {scheduleError && (
-                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-                  {scheduleError}
-                </div>
-              )}
-
-              {scheduleSuccess && (
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                  {scheduleSuccess}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={savingSchedule || scheduleLoading}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingSchedule ? 'Guardando horario...' : 'Guardar horario semanal'}
-              </button>
-            </form>
-          </section>
-
-          <section className="rounded-[2rem] border border-slate-200/80 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                 <PlusCircle className="h-5 w-5" />
@@ -837,6 +739,104 @@ export default function AdminAppointmentsPage() {
                 ))
               )}
             </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200/80 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+            <h2 className="text-2xl font-black text-slate-950">Horario semanal</h2>
+            <p className="mt-2 text-slate-600">
+              Ajusta apertura y cierre por día. Si activas domingo, el booking público también podrá ofrecer citas ese día.
+            </p>
+
+            <form onSubmit={handleSaveSchedule} className="mt-8 space-y-4">
+              {Object.entries(schedule).map(([dayKey, dayConfig]) => (
+                <div
+                  key={dayKey}
+                  className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[180px_minmax(168px,1fr)_minmax(168px,1fr)] md:items-center"
+                >
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={dayConfig.enabled}
+                      onChange={(event) =>
+                        setSchedule((current) => ({
+                          ...current,
+                          [dayKey]: {
+                            ...current[dayKey],
+                            enabled: event.target.checked,
+                          },
+                        }))
+                      }
+                      className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                    />
+                    <span className="font-semibold text-slate-900">{dayLabelsByKey[dayKey]}</span>
+                  </label>
+
+                  <label className="block min-w-0">
+                    <span className="text-sm font-semibold text-slate-700">Apertura</span>
+                    <input
+                      type="time"
+                      value={dayConfig.openTime}
+                      disabled={!dayConfig.enabled}
+                      onChange={(event) =>
+                        setSchedule((current) => ({
+                          ...current,
+                          [dayKey]: {
+                            ...current[dayKey],
+                            openTime: event.target.value,
+                          },
+                        }))
+                      }
+                      className="mt-2 block min-h-14 w-full min-w-[10.5rem] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                    />
+                  </label>
+
+                  <label className="block min-w-0">
+                    <span className="text-sm font-semibold text-slate-700">Cierre</span>
+                    <input
+                      type="time"
+                      value={dayConfig.closeTime}
+                      disabled={!dayConfig.enabled}
+                      onChange={(event) =>
+                        setSchedule((current) => ({
+                          ...current,
+                          [dayKey]: {
+                            ...current[dayKey],
+                            closeTime: event.target.value,
+                          },
+                        }))
+                      }
+                      className="mt-2 block min-h-14 w-full min-w-[10.5rem] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                    />
+                  </label>
+                </div>
+              ))}
+
+              {scheduleLoading && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Cargando horario semanal...
+                </div>
+              )}
+
+              {scheduleError && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                  {scheduleError}
+                </div>
+              )}
+
+              {scheduleSuccess && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  {scheduleSuccess}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={savingSchedule || scheduleLoading}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingSchedule ? 'Guardando horario...' : 'Guardar horario semanal'}
+              </button>
+            </form>
           </section>
         </div>
       </section>
