@@ -11,6 +11,7 @@ import {
   BookText,
   Package,
   CalendarDays,
+  ShoppingBag,
   Activity,
   History,
   ClipboardPlus,
@@ -35,6 +36,7 @@ const adminNavItems = [
   { href: '/admin/pacientes', label: 'Pacientes', icon: Users },
   { href: '/admin/blog', label: 'Blog', icon: BookText },
   { href: '/admin/productos', label: 'Productos', icon: Package },
+  { href: '/admin/solicitudes-compra', label: 'Solicitudes', icon: ShoppingBag },
   { href: '/admin/citas', label: 'Citas', icon: CalendarDays },
 ] as const;
 

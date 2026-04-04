@@ -3,9 +3,17 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { Phone, Mail, MapPin, Send, ArrowRight, Clock3, ShieldCheck } from 'lucide-react';
+import { PODOMEDIC_WHATSAPP_NUMBER, buildWhatsAppUrl } from '@/lib/contact';
 
 export default function Contact() {
-  const [form, setForm] = useState({ name: '', email: '', message: '' });
+  const [form, setForm] = useState(() => {
+    const prefilledMessage =
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('message') ?? ''
+        : '';
+
+    return { name: '', email: '', message: prefilledMessage };
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +63,14 @@ export default function Contact() {
                 <div>
                   <p className="font-semibold text-white">WhatsApp</p>
                   <p className="text-white/70">771 962 5242</p>
+                  <a
+                    href={buildWhatsAppUrl('Hola, me gustaría recibir información en PodoMedic.')}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex text-sm font-semibold text-cyan-200 transition-colors hover:text-cyan-100"
+                  >
+                    Abrir WhatsApp
+                  </a>
                 </div>
               </div>
               <div className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -125,6 +141,15 @@ export default function Contact() {
               <Send className="h-5 w-5" />
               Enviar Mensaje
             </button>
+            <a
+              href={`https://wa.me/${PODOMEDIC_WHATSAPP_NUMBER}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-6 py-4 font-semibold text-cyan-700 transition-all hover:bg-cyan-100"
+            >
+              <Phone className="h-5 w-5" />
+              Continuar por WhatsApp
+            </a>
           </form>
         </div>
       </div>

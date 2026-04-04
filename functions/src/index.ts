@@ -9,6 +9,13 @@ initializeApp();
 type AdminType = "superadmin" | "admin";
 type AccountStatus = "active" | "inactive";
 type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "completed";
+type PurchaseRequestItem = {
+  id: string;
+  slug: string;
+  name: string;
+  price: number;
+  quantity: number;
+};
 
 function splitName(fullName: string) {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -422,5 +429,89 @@ export const createAdminAppointment = onCall(async (request) => {
   return {
     appointmentId: appointmentRef.id,
     message: "Cita creada correctamente.",
+  };
+});
+
+export const createPurchaseRequest = onCall(async (request) => {
+  const {
+    name,
+    email,
+    phone,
+    notes,
+    subtotal,
+    items,
+    source,
+  } = request.data as {
+    name?: string;
+    email?: string;
+    phone?: string;
+    notes?: string;
+    subtotal?: number;
+    items?: PurchaseRequestItem[];
+    source?: "cart_whatsapp" | "cart_contact";
+  };
+
+  const normalizedName = name?.trim();
+  const normalizedEmail = email?.trim().toLowerCase();
+  const normalizedPhone = phone?.trim() ?? "";
+  const normalizedNotes = notes?.trim() ?? "";
+  const requestSource = source ?? "cart_whatsapp";
+  const normalizedSubtotal = Number(subtotal);
+
+  if (!normalizedName || !normalizedEmail) {
+    throw new HttpsError("invalid-argument", "Nombre y correo son obligatorios.");
+  }
+
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new HttpsError("invalid-argument", "Debes incluir al menos un producto en la solicitud.");
+  }
+
+  const sanitizedItems = items
+    .map((item) => ({
+      id: item?.id?.trim(),
+      slug: item?.slug?.trim(),
+      name: item?.name?.trim(),
+      price: Number(item?.price),
+      quantity: Number(item?.quantity),
+    }))
+    .filter(
+      (item) =>
+        Boolean(item.id) &&
+        Boolean(item.slug) &&
+        Boolean(item.name) &&
+        Number.isFinite(item.price) &&
+        item.price >= 0 &&
+        Number.isInteger(item.quantity) &&
+        item.quantity > 0,
+    );
+
+  if (sanitizedItems.length !== items.length) {
+    throw new HttpsError("invalid-argument", "La solicitud contiene productos inválidos.");
+  }
+
+  const calculatedSubtotal = sanitizedItems.reduce((total, item) => total + item.price * item.quantity, 0);
+
+  if (!Number.isFinite(normalizedSubtotal) || Math.abs(calculatedSubtotal - normalizedSubtotal) > 1) {
+    throw new HttpsError("invalid-argument", "El subtotal enviado no coincide con los productos seleccionados.");
+  }
+
+  const db = getFirestore();
+  const purchaseRequestRef = await db.collection("purchase_requests").add({
+    userId: request.auth?.uid ?? null,
+    customerName: normalizedName,
+    customerEmail: normalizedEmail,
+    customerPhone: normalizedPhone,
+    notes: normalizedNotes,
+    subtotal: calculatedSubtotal,
+    items: sanitizedItems,
+    itemCount: sanitizedItems.reduce((total, item) => total + item.quantity, 0),
+    status: "new",
+    source: requestSource,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    requestId: purchaseRequestRef.id,
+    message: "Solicitud de compra registrada correctamente.",
   };
 });

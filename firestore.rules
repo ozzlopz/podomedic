@@ -85,6 +85,10 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /purchase_requests/{requestId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

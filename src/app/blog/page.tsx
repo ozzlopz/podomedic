@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
-import { CalendarDays, ArrowRight } from 'lucide-react';
+import { CalendarDays, ArrowRight, Search } from 'lucide-react';
 import { db } from '@/lib/firebase';
 
 type BlogPost = {
@@ -17,9 +17,13 @@ type BlogPost = {
   publishedAt?: { seconds?: number } | null;
 };
 
+type BlogSort = 'recent' | 'oldest' | 'title';
+
 export default function BlogPage() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<BlogSort>('recent');
 
   useEffect(() => {
     const loadPosts = async () => {
@@ -46,6 +50,30 @@ export default function BlogPage() {
     loadPosts();
   }, []);
 
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredPosts = useMemo(() => {
+    const nextPosts = posts.filter((post) => {
+      const searchableText = [post.title, post.excerpt].filter(Boolean).join(' ').toLowerCase();
+      return normalizedSearch ? searchableText.includes(normalizedSearch) : true;
+    });
+
+    const sortedPosts = [...nextPosts];
+
+    if (sortBy === 'oldest') {
+      sortedPosts.sort((a, b) => (a.publishedAt?.seconds ?? 0) - (b.publishedAt?.seconds ?? 0));
+    } else if (sortBy === 'title') {
+      sortedPosts.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? '', 'es-MX'));
+    }
+
+    return sortedPosts;
+  }, [normalizedSearch, posts, sortBy]);
+
+  const sortChips: Array<{ value: BlogSort; label: string }> = [
+    { value: 'recent', label: 'Más recientes' },
+    { value: 'oldest', label: 'Más antiguos' },
+    { value: 'title', label: 'A-Z' },
+  ];
+
   return (
     <div className="flex-1 bg-[linear-gradient(180deg,#f8fbff_0%,#eef8fb_44%,#ffffff_100%)] px-4 pb-20 sm:px-6">
       <div className="mx-auto max-w-6xl">
@@ -62,6 +90,45 @@ export default function BlogPage() {
           </p>
         </section>
 
+        <section className="rounded-[2rem] border border-slate-200/80 bg-white/85 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-2xl font-black text-slate-950">Encuentra el tema que buscas</h2>
+              <p className="mt-2 text-slate-600">Busca por título o extracto y organiza las publicaciones según prefieras.</p>
+            </div>
+            <label className="relative block w-full max-w-xl">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Buscar artículo"
+                className="w-full rounded-full border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+              />
+            </label>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {sortChips.map((chip) => {
+              const isActive = sortBy === chip.value;
+
+              return (
+                <button
+                  key={chip.value}
+                  type="button"
+                  onClick={() => setSortBy(chip.value)}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    isActive
+                      ? 'bg-slate-950 text-white shadow-[0_14px_30px_rgba(15,23,42,0.16)]'
+                      : 'border border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-200 hover:text-cyan-700'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
         <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {loading ? (
             <div className="rounded-[2rem] border border-slate-200/80 bg-white p-8 text-slate-500 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
@@ -71,8 +138,12 @@ export default function BlogPage() {
             <div className="rounded-[2rem] border border-slate-200/80 bg-white p-8 text-slate-500 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
               Aún no hay artículos publicados.
             </div>
+          ) : filteredPosts.length === 0 ? (
+            <div className="rounded-[2rem] border border-slate-200/80 bg-white p-8 text-slate-500 shadow-[0_24px_80px_rgba(15,23,42,0.08)] md:col-span-2 xl:col-span-3">
+              No encontramos artículos que coincidan con tu búsqueda.
+            </div>
           ) : (
-            posts.map((post) => (
+            filteredPosts.map((post) => (
               <article
                 key={post.id}
                 className="overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.08)]"

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
-import { CalendarDays, FileText, ShieldCheck, TrendingUp, Users } from 'lucide-react';
+import { CalendarDays, FileText, ShieldCheck, ShoppingBag, TrendingUp, Users } from 'lucide-react';
 import { db } from '@/lib/firebase';
 
 type Patient = {
@@ -31,10 +31,27 @@ type Consultation = {
   consultationDate?: { seconds?: number };
 };
 
+type PurchaseRequest = {
+  id: string;
+  customerName?: string;
+  subtotal?: number;
+  status?: 'new' | 'contacted' | 'completed' | 'cancelled';
+  createdAt?: { seconds?: number };
+};
+
+function formatCurrency(value?: number) {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 0,
+  }).format(value ?? 0);
+}
+
 export default function Admin() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
+  const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,10 +62,12 @@ export default function Admin() {
       }
 
       try {
-        const [patientsSnapshot, appointmentsSnapshot, consultationsSnapshot] = await Promise.all([
+        const [patientsSnapshot, appointmentsSnapshot, consultationsSnapshot, purchaseRequestsSnapshot] =
+          await Promise.all([
           getDocs(query(collection(db, 'users'), where('role', '==', 'customer'))),
           getDocs(query(collection(db, 'appointments'), orderBy('scheduledAt', 'desc'), limit(6))),
           getDocs(query(collection(db, 'consultations'), orderBy('consultationDate', 'desc'), limit(5))),
+          getDocs(query(collection(db, 'purchase_requests'), orderBy('createdAt', 'desc'), limit(5))),
         ]);
 
         setPatients(
@@ -69,6 +88,12 @@ export default function Admin() {
             ...docItem.data(),
           })) as Consultation[],
         );
+        setPurchaseRequests(
+          purchaseRequestsSnapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data(),
+          })) as PurchaseRequest[],
+        );
       } finally {
         setLoading(false);
       }
@@ -79,6 +104,7 @@ export default function Admin() {
 
   const activePatients = patients.filter((patient) => (patient.status ?? 'active') === 'active').length;
   const pendingAppointments = appointments.filter((appointment) => appointment.status === 'pending').length;
+  const pendingPurchaseRequests = purchaseRequests.filter((request) => (request.status ?? 'new') === 'new').length;
   const todayAppointments = appointments.filter((appointment) => {
     if (!appointment.scheduledAt?.seconds) return false;
     const appointmentDate = new Date(appointment.scheduledAt.seconds * 1000);
@@ -131,6 +157,14 @@ export default function Admin() {
           <p className="mt-4 text-3xl font-black text-slate-950">{loading ? '...' : pendingAppointments}</p>
           <p className="mt-1 text-sm text-slate-600">Citas pendientes</p>
         </div>
+        <Link
+          href="/admin/solicitudes-compra"
+          className="rounded-3xl border border-white/70 bg-white/80 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan-200 sm:col-span-2 xl:col-span-4"
+        >
+          <ShoppingBag className="h-7 w-7 text-teal-600" />
+          <p className="mt-4 text-3xl font-black text-slate-950">{loading ? '...' : pendingPurchaseRequests}</p>
+          <p className="mt-1 text-sm text-slate-600">Solicitudes de compra nuevas</p>
+        </Link>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
@@ -223,6 +257,52 @@ export default function Admin() {
               ))
             )}
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-slate-200/80 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-slate-950">Solicitudes de compra recientes</h2>
+            <p className="mt-2 text-slate-600">Da seguimiento rápido a los pedidos que salieron del carrito.</p>
+          </div>
+          <Link href="/admin/solicitudes-compra" className="text-sm font-semibold text-cyan-700 hover:text-cyan-600">
+            Ver solicitudes
+          </Link>
+        </div>
+        <div className="mt-6 space-y-4">
+          {loading ? (
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-slate-500">Cargando solicitudes...</div>
+          ) : purchaseRequests.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-slate-500">
+              Aún no hay solicitudes de compra.
+            </div>
+          ) : (
+            purchaseRequests.map((request) => (
+              <Link
+                key={request.id}
+                href={`/admin/solicitudes-compra/${request.id}`}
+                className="block rounded-3xl border border-slate-200 bg-slate-50 p-5 transition hover:border-cyan-200 hover:bg-cyan-50/40"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-lg font-bold text-slate-950">{request.customerName ?? 'Solicitud de compra'}</p>
+                    <p className="text-sm text-slate-600">Subtotal estimado: {formatCurrency(request.subtotal)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-cyan-700">
+                      {request.createdAt?.seconds
+                        ? new Date(request.createdAt.seconds * 1000).toLocaleString('es-MX')
+                        : 'Sin fecha'}
+                    </p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.14em] text-slate-500">
+                      {request.status ?? 'new'}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            ))
+          )}
         </div>
       </section>
 

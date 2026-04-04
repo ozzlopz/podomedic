@@ -1,7 +1,8 @@
 'use client';
 
-const whatsappUrl =
-  'https://wa.me/527719625242?text=Hola,%20me%20gustar%C3%ADa%20recibir%20informaci%C3%B3n%20sobre%20una%20consulta%20en%20PodoMedic.';
+import { buildWhatsAppUrl } from '@/lib/contact';
+
+const whatsappUrl = buildWhatsAppUrl('Hola, me gustaría recibir información sobre una consulta en PodoMedic.');
 
 export default function WhatsAppButton() {
   return (

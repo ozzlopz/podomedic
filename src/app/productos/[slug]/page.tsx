@@ -4,19 +4,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { ArrowLeft, BadgeDollarSign } from 'lucide-react';
+import { ArrowLeft, BadgeDollarSign, ShoppingCart } from 'lucide-react';
+import { useCart } from '@/contexts/CartContext';
 import { db } from '@/lib/firebase';
 import { useParams } from 'next/navigation';
-
-type Product = {
-  id: string;
-  name?: string;
-  slug?: string;
-  description?: string;
-  imageUrl?: string;
-  price?: number;
-  activeInStore?: boolean;
-};
+import type { StoreProduct } from '@/types/store';
 
 function formatCurrency(value?: number) {
   return new Intl.NumberFormat('es-MX', {
@@ -28,7 +20,8 @@ function formatCurrency(value?: number) {
 
 export default function ProductDetailPage() {
   const params = useParams<{ slug: string }>();
-  const [product, setProduct] = useState<Product | null>(null);
+  const { addItem } = useCart();
+  const [product, setProduct] = useState<StoreProduct | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,7 +41,7 @@ export default function ProductDetailPage() {
           setProduct({
             id: docItem.id,
             ...docItem.data(),
-          } as Product);
+          } as StoreProduct);
         }
       } finally {
         setLoading(false);
@@ -111,6 +104,14 @@ export default function ProductDetailPage() {
                     recomendación más personalizada.
                   </p>
                   <div className="mt-5 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => product && addItem(product)}
+                      className="inline-flex items-center gap-2 rounded-full bg-cyan-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-cyan-500"
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                      Agregar al carrito
+                    </button>
                     <Link
                       href="/contact"
                       className="rounded-full bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"

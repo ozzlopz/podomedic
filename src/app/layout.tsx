@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AuthProviderWrapper from "@/components/AuthProviderWrapper";
+import CartProviderWrapper from "@/components/CartProviderWrapper";
 import SiteChrome from "@/components/SiteChrome";
 
 export const metadata: Metadata = {
@@ -17,7 +18,9 @@ export default function RootLayout({
     <html lang="es" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-gray-50">
         <AuthProviderWrapper>
-          <SiteChrome>{children}</SiteChrome>
+          <CartProviderWrapper>
+            <SiteChrome>{children}</SiteChrome>
+          </CartProviderWrapper>
         </AuthProviderWrapper>
       </body>
     </html>
