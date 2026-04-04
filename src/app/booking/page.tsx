@@ -124,10 +124,10 @@ export default function Booking() {
               Reserva tu cita
             </span>
             <h1 className="mt-6 max-w-3xl text-4xl font-black leading-tight text-slate-950 sm:text-5xl lg:text-6xl">
-              Agenda una consulta con una experiencia más clara y profesional.
+              Agenda una consulta de podología en Pachuca con una experiencia más clara y profesional.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
-              Completa el formulario y te contactaremos para confirmar fecha, hora y detalles de tu atención podológica.
+              Completa el formulario y te contactaremos para confirmar fecha, hora y detalles de tu atención podológica en Pachuca.
             </p>
 
             <div className="mt-10 grid gap-4 sm:grid-cols-3">

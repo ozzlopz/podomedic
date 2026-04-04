@@ -1,6 +1,8 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import Slideshow from '@/components/Slideshow';
 import { Stethoscope, Users, Award, Clock, Footprints, Shield, Zap, ArrowRight, HeartPulse, Sparkles } from 'lucide-react';
+import { businessAddress, businessCity, businessCountry, businessPhoneDisplay, businessPhoneIntl, businessRegion, siteDescription, siteUrl } from '@/lib/site';
 
 const services = [
   {
@@ -46,9 +48,53 @@ const trustPoints = [
   'Seguimiento profesional y prevención de complicaciones.',
 ];
 
+export const metadata: Metadata = {
+  title: 'Podólogo en Pachuca',
+  description: siteDescription,
+  alternates: {
+    canonical: '/',
+  },
+};
+
 export default function Home() {
+  const localBusinessSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'MedicalBusiness',
+    name: 'PodoMedic',
+    url: siteUrl,
+    telephone: businessPhoneIntl,
+    image: `${siteUrl}/images/logo.png`,
+    description: siteDescription,
+    areaServed: `${businessCity}, ${businessRegion}`,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: businessAddress,
+      addressLocality: businessCity,
+      addressRegion: businessRegion,
+      addressCountry: businessCountry,
+    },
+    openingHoursSpecification: [
+      {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        opens: '11:00',
+        closes: '19:00',
+      },
+      {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek: 'Saturday',
+        opens: '10:00',
+        closes: '14:00',
+      },
+    ],
+  };
+
   return (
     <div className="-mt-24 flex-1 bg-[linear-gradient(180deg,#f7fbff_0%,#eef7fb_42%,#ffffff_100%)] sm:-mt-28">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }}
+      />
       <section className="pt-0">
         <Slideshow />
       </section>
@@ -62,10 +108,10 @@ export default function Home() {
                 Atención médica especializada
               </span>
               <h2 className="mt-6 max-w-3xl text-4xl font-black leading-tight text-slate-950 sm:text-5xl lg:text-6xl">
-                Podología médica con una experiencia más humana, precisa y confiable.
+                Podología médica en Pachuca con una experiencia más humana, precisa y confiable.
               </h2>
               <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-600 sm:text-xl">
-                En PodoMedic, nuestra atención es brindada por un especialista en podología médica, con experiencia en el manejo de pie diabético, hipertensión y otras condiciones que requieren cuidado profesional.
+                En PodoMedic, nuestra atención en Pachuca de Soto es brindada por un especialista en podología médica, con experiencia en el manejo de pie diabético, hipertensión y otras condiciones que requieren cuidado profesional.
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link href="/booking" className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-6 py-3 font-semibold text-white transition-all hover:bg-slate-800">
@@ -222,7 +268,7 @@ export default function Home() {
               </span>
               <h2 className="mt-5 text-4xl font-black text-slate-950 sm:text-5xl">Empieza hoy con un cuidado podológico más profesional.</h2>
               <p className="mt-5 max-w-2xl text-lg leading-relaxed text-slate-600">
-                Agenda tu cita y recibe una valoración clara, tratamiento seguro y recomendaciones útiles para el cuidado diario.
+                Agenda tu cita en Pachuca y recibe una valoración clara, tratamiento seguro y recomendaciones útiles para el cuidado diario.
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link href="/booking" className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-7 py-3 font-semibold text-white transition-all hover:bg-slate-800">
@@ -249,7 +295,7 @@ export default function Home() {
             <div className="md:col-span-2">
               <h3 className="text-2xl font-black text-teal-300">PodoMedic</h3>
               <p className="mt-4 max-w-md text-slate-300">
-                Especialistas en podología médica con atención personalizada para el cuidado integral del pie.
+                Especialistas en podología médica en Pachuca con atención personalizada para el cuidado integral del pie.
                 Tu salud podológica es nuestra prioridad.
               </p>
             </div>
@@ -270,11 +316,11 @@ export default function Home() {
               <div className="space-y-3 text-slate-300">
                 <div className="flex items-center">
                   <span className="mr-2">📍</span>
-                  <span>Av. La Principal 10, Real de Toledo. Segundo Piso. Arriba de Laboratorios Coahuila</span>
+                  <span>{businessAddress}, {businessCity}, {businessRegion}</span>
                 </div>
                 <div className="flex items-center">
                   <span className="mr-2">📞</span>
-                  <span>WhatsApp: 771 962 5242</span>
+                  <span>WhatsApp: {businessPhoneDisplay}</span>
                 </div>
                 <div className="flex items-center">
                   <span className="mr-2">✉️</span>

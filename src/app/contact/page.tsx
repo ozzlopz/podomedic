@@ -30,10 +30,10 @@ export default function Contact() {
               Contacto
             </span>
             <h1 className="mt-6 max-w-3xl text-4xl font-black leading-tight text-slate-950 sm:text-5xl lg:text-6xl">
-              Estamos aquí para orientarte antes de tu consulta.
+              Estamos aquí para orientarte antes de tu consulta de podología en Pachuca.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
-              Escríbenos si tienes dudas sobre tratamientos, disponibilidad o el tipo de atención que necesitas.
+              Escríbenos si tienes dudas sobre tratamientos, disponibilidad o el tipo de atención podológica que necesitas en Pachuca.
             </p>
 
             <div className="mt-10 grid gap-4 sm:grid-cols-3">
@@ -84,7 +84,7 @@ export default function Contact() {
                 <MapPin className="mt-1 h-5 w-5 text-emerald-300" />
                 <div>
                   <p className="font-semibold text-white">Dirección</p>
-                  <p className="text-white/70">Av. La Principal 10, Real de Toledo. Segundo Piso. Arriba de Laboratorios Coahuila</p>
+                  <p className="text-white/70">Av. La Principal 10, Real de Toledo. Segundo Piso. Arriba de Laboratorios Coahuila, Pachuca de Soto, Hidalgo</p>
                 </div>
               </div>
             </div>
