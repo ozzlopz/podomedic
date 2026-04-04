@@ -751,9 +751,9 @@ export default function AdminAppointmentsPage() {
               {Object.entries(schedule).map(([dayKey, dayConfig]) => (
                 <div
                   key={dayKey}
-                  className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[180px_minmax(168px,1fr)_minmax(168px,1fr)] md:items-center"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
                 >
-                  <label className="flex items-center gap-3">
+                  <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
                       checked={dayConfig.enabled}
@@ -769,45 +769,47 @@ export default function AdminAppointmentsPage() {
                       className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
                     />
                     <span className="font-semibold text-slate-900">{dayLabelsByKey[dayKey]}</span>
-                  </label>
+                  </div>
 
-                  <label className="block min-w-0">
-                    <span className="text-sm font-semibold text-slate-700">Apertura</span>
-                    <input
-                      type="time"
-                      value={dayConfig.openTime}
-                      disabled={!dayConfig.enabled}
-                      onChange={(event) =>
-                        setSchedule((current) => ({
-                          ...current,
-                          [dayKey]: {
-                            ...current[dayKey],
-                            openTime: event.target.value,
-                          },
-                        }))
-                      }
-                      className="mt-2 block min-h-14 w-full min-w-[10.5rem] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-                    />
-                  </label>
+                  <div className="mt-4 space-y-4">
+                    <label className="block min-w-0">
+                      <span className="text-sm font-semibold text-slate-700">Apertura</span>
+                      <input
+                        type="time"
+                        value={dayConfig.openTime}
+                        disabled={!dayConfig.enabled}
+                        onChange={(event) =>
+                          setSchedule((current) => ({
+                            ...current,
+                            [dayKey]: {
+                              ...current[dayKey],
+                              openTime: event.target.value,
+                            },
+                          }))
+                        }
+                        className="mt-2 block min-h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                      />
+                    </label>
 
-                  <label className="block min-w-0">
-                    <span className="text-sm font-semibold text-slate-700">Cierre</span>
-                    <input
-                      type="time"
-                      value={dayConfig.closeTime}
-                      disabled={!dayConfig.enabled}
-                      onChange={(event) =>
-                        setSchedule((current) => ({
-                          ...current,
-                          [dayKey]: {
-                            ...current[dayKey],
-                            closeTime: event.target.value,
-                          },
-                        }))
-                      }
-                      className="mt-2 block min-h-14 w-full min-w-[10.5rem] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-                    />
-                  </label>
+                    <label className="block min-w-0">
+                      <span className="text-sm font-semibold text-slate-700">Cierre</span>
+                      <input
+                        type="time"
+                        value={dayConfig.closeTime}
+                        disabled={!dayConfig.enabled}
+                        onChange={(event) =>
+                          setSchedule((current) => ({
+                            ...current,
+                            [dayKey]: {
+                              ...current[dayKey],
+                              closeTime: event.target.value,
+                            },
+                          }))
+                        }
+                        className="mt-2 block min-h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-lg text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                      />
+                    </label>
+                  </div>
                 </div>
               ))}
 
