@@ -99,6 +99,11 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdmin();
     }
 
+    match /contact_messages/{messageId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

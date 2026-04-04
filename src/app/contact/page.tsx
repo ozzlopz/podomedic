@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { httpsCallable } from 'firebase/functions';
 import { Phone, Mail, MapPin, Send, ArrowRight, Clock3, ShieldCheck } from 'lucide-react';
 import { PODOMEDIC_WHATSAPP_NUMBER, buildWhatsAppUrl } from '@/lib/contact';
+import { functions } from '@/lib/firebase';
 
 export default function Contact() {
   const [form, setForm] = useState(() => {
@@ -14,11 +16,44 @@ export default function Contact() {
 
     return { name: '', email: '', message: prefilledMessage, acceptedPolicies: true };
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission
-    alert('Mensaje enviado');
+
+    if (!functions) {
+      setError('No se pudo conectar con Firebase Functions.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const submitContactMessage = httpsCallable<
+        { name: string; email: string; message: string },
+        { emailSent?: boolean }
+      >(functions, 'submitContactMessage');
+      const response = await submitContactMessage({
+        name: form.name,
+        email: form.email,
+        message: form.message,
+      });
+      setSubmitted(true);
+      setSuccessMessage(
+        response.data.emailSent
+          ? 'Recibimos tu mensaje correctamente y enviamos una notificación al correo de contacto.'
+          : 'Recibimos tu mensaje correctamente. Quedó guardado para seguimiento.',
+      );
+      setForm({ name: '', email: '', message: '', acceptedPolicies: true });
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'No fue posible enviar tu mensaje.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -107,6 +142,12 @@ export default function Contact() {
           <h2 className="text-3xl font-black text-slate-950">Envíanos un mensaje</h2>
           <p className="mt-2 text-slate-600">Cuéntanos tu duda y te orientaremos con la mejor opción.</p>
           <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+            {submitted && (
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                {successMessage}
+              </div>
+            )}
+
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Nombre</label>
               <input
@@ -157,9 +198,20 @@ export default function Contact() {
                 .
               </span>
             </label>
-            <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 font-semibold text-white transition-all hover:bg-slate-800">
+
+            {error && (
+              <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 font-semibold text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
               <Send className="h-5 w-5" />
-              Enviar Mensaje
+              {loading ? 'Enviando mensaje...' : 'Enviar Mensaje'}
             </button>
             <a
               href={`https://wa.me/${PODOMEDIC_WHATSAPP_NUMBER}`}

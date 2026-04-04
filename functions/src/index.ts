@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { randomBytes } from "node:crypto";
 import {
@@ -18,6 +19,9 @@ import {
 
 initializeApp();
 
+const resendApiKey = defineSecret("RESEND_API_KEY");
+const resendFromEmail = defineSecret("RESEND_FROM_EMAIL");
+
 type AdminType = "superadmin" | "admin";
 type AccountStatus = "active" | "inactive";
 type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "completed";
@@ -27,6 +31,13 @@ type PurchaseRequestItem = {
   name: string;
   price: number;
   quantity: number;
+};
+
+type ContactEmailResponse = {
+  id?: string;
+  error?: {
+    message?: string;
+  };
 };
 
 function splitName(fullName: string) {
@@ -71,6 +82,52 @@ async function getAppointmentSchedule() {
   return mergeWeeklySchedule(scheduleSnapshot.data()?.days as Partial<WeeklySchedule> | undefined);
 }
 
+async function sendResendEmail(params: {
+  to: string[];
+  subject: string;
+  html: string;
+  text: string;
+  replyTo?: string;
+}) {
+  const apiKey = resendApiKey.value();
+  const fromEmail = resendFromEmail.value();
+
+  if (!apiKey || !fromEmail) {
+    return {
+      sent: false,
+      reason: "not_configured",
+    };
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: params.to,
+      subject: params.subject,
+      reply_to: params.replyTo,
+      text: params.text,
+      html: params.html,
+    }),
+  });
+
+  const payload = await response.json() as ContactEmailResponse;
+
+  if (!response.ok || payload.error?.message) {
+    throw new Error(payload.error?.message || "No fue posible enviar el correo.");
+  }
+
+  return {
+    sent: true,
+    provider: "resend",
+    providerId: payload.id ?? "",
+  };
+}
+
 export const getBookingSchedule = onCall(async () => {
   const schedule = await getAppointmentSchedule();
 
@@ -79,6 +136,96 @@ export const getBookingSchedule = onCall(async () => {
     slotDurationMinutes: SLOT_DURATION_MINUTES,
   };
 });
+
+export const submitContactMessage = onCall(
+  { secrets: [resendApiKey, resendFromEmail] },
+  async (request) => {
+    const {
+      name,
+      email,
+      message,
+    } = request.data as {
+      name?: string;
+      email?: string;
+      message?: string;
+    };
+
+    const normalizedName = name?.trim();
+    const normalizedEmail = email?.trim().toLowerCase();
+    const normalizedMessage = message?.trim();
+
+    if (!normalizedName || !normalizedEmail || !normalizedMessage) {
+      throw new HttpsError("invalid-argument", "Nombre, correo y mensaje son obligatorios.");
+    }
+
+    const db = getFirestore();
+    const messageRef = await db.collection("contact_messages").add({
+      name: normalizedName,
+      email: normalizedEmail,
+      message: normalizedMessage,
+      status: "new",
+      emailStatus: "pending",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    const apiKey = resendApiKey.value();
+    const fromEmail = resendFromEmail.value();
+
+    if (!apiKey || !fromEmail) {
+      await messageRef.update({
+        emailStatus: "not_configured",
+      });
+
+      return {
+        messageId: messageRef.id,
+        saved: true,
+        emailSent: false,
+      };
+    }
+
+    try {
+      const payload = await sendResendEmail({
+        to: ["contacto@podologapachuca.com"],
+        subject: `Nuevo mensaje de contacto de ${normalizedName}`,
+        replyTo: normalizedEmail,
+        text: `Nombre: ${normalizedName}\nCorreo: ${normalizedEmail}\n\nMensaje:\n${normalizedMessage}`,
+        html: `
+          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a;">
+            <h2 style="margin:0 0 16px;">Nuevo mensaje de contacto</h2>
+            <p><strong>Nombre:</strong> ${normalizedName}</p>
+            <p><strong>Correo:</strong> ${normalizedEmail}</p>
+            <p><strong>Mensaje:</strong></p>
+            <p style="white-space:pre-wrap;">${normalizedMessage}</p>
+          </div>
+        `,
+      });
+
+      await messageRef.update({
+        emailStatus: "sent",
+        emailSentAt: FieldValue.serverTimestamp(),
+        emailProvider: payload.provider ?? "resend",
+        emailProviderId: payload.providerId ?? "",
+      });
+
+      return {
+        messageId: messageRef.id,
+        saved: true,
+        emailSent: true,
+      };
+    } catch (error) {
+      await messageRef.update({
+        emailStatus: "failed",
+        emailError: error instanceof Error ? error.message : "No fue posible enviar el correo.",
+      });
+
+      return {
+        messageId: messageRef.id,
+        saved: true,
+        emailSent: false,
+      };
+    }
+  },
+);
 
 async function assertSlotAvailable(params: {
   date: string;
@@ -445,63 +592,144 @@ export const setCustomerAccountStatus = onCall(async (request) => {
   };
 });
 
-export const createBookingAppointment = onCall(async (request) => {
-  const {
-    name,
-    email,
-    date,
-    time,
-    message,
-  } = request.data as {
-    name?: string;
-    email?: string;
-    date?: string;
-    time?: string;
-    message?: string;
-  };
+export const createBookingAppointment = onCall(
+  { secrets: [resendApiKey, resendFromEmail] },
+  async (request) => {
+    const {
+      name,
+      email,
+      date,
+      time,
+      message,
+    } = request.data as {
+      name?: string;
+      email?: string;
+      date?: string;
+      time?: string;
+      message?: string;
+    };
 
-  if (!name || !email || !date || !time) {
-    throw new HttpsError("invalid-argument", "Nombre, correo, fecha y hora son obligatorios.");
+    if (!name || !email || !date || !time) {
+      throw new HttpsError("invalid-argument", "Nombre, correo, fecha y hora son obligatorios.");
+    }
+
+    await assertSlotAvailable({ date, time });
+
+    const db = getFirestore();
+    const patient = await findOrCreatePatientProfile({
+      email,
+      name,
+      source: "booking",
+    });
+
+    const scheduledAt = new Date(`${date}T${time}:00`);
+
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new HttpsError("invalid-argument", "La fecha u hora de la cita no son válidas.");
+    }
+
+    const appointmentRef = await db.collection("appointments").add({
+      userId: patient.uid,
+      patientName: name.trim(),
+      patientEmail: email.trim().toLowerCase(),
+      patientPhone: "",
+      scheduledDate: date,
+      scheduledTime: time,
+      scheduledAt,
+      reason: message?.trim() || "Solicitud desde formulario público",
+      notes: message?.trim() || "",
+      status: "pending",
+      source: "booking",
+      slotDurationMinutes: SLOT_DURATION_MINUTES,
+      adminEmailStatus: "pending",
+      patientEmailStatus: "pending",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    const localizedDate = scheduledAt.toLocaleDateString("es-MX", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const localizedTime = scheduledAt.toLocaleTimeString("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const adminEmailResult = await (async () => {
+      try {
+        return await sendResendEmail({
+          to: ["contacto@podologapachuca.com"],
+          replyTo: email.trim().toLowerCase(),
+          subject: `Nueva reservación de cita de ${name.trim()}`,
+          text: `Se registró una nueva reservación.\n\nPaciente: ${name.trim()}\nCorreo: ${email.trim().toLowerCase()}\nFecha: ${localizedDate}\nHora: ${localizedTime}\n\nMotivo:\n${message?.trim() || "Solicitud desde formulario público"}`,
+          html: `
+            <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a;">
+              <h2 style="margin:0 0 16px;">Nueva reservación de cita</h2>
+              <p><strong>Paciente:</strong> ${name.trim()}</p>
+              <p><strong>Correo:</strong> ${email.trim().toLowerCase()}</p>
+              <p><strong>Fecha:</strong> ${localizedDate}</p>
+              <p><strong>Hora:</strong> ${localizedTime}</p>
+              <p><strong>Motivo:</strong></p>
+              <p style="white-space:pre-wrap;">${message?.trim() || "Solicitud desde formulario público"}</p>
+            </div>
+          `,
+        });
+      } catch (error) {
+        return {
+          sent: false,
+          reason: error instanceof Error ? error.message : "No fue posible enviar el correo al consultorio.",
+        };
+      }
+    })();
+
+    const patientEmailResult = await (async () => {
+      try {
+        return await sendResendEmail({
+          to: [email.trim().toLowerCase()],
+          subject: "Gracias por reservar tu cita en PodoMedic",
+          text: `Hola ${name.trim()},\n\nGracias por reservar tu cita en PodoMedic.\nRecibimos tu solicitud para ${localizedDate} a las ${localizedTime}.\nNos pondremos en contacto contigo para confirmar la cita y darte seguimiento.\n\nSi necesitas algo más, puedes escribirnos a contacto@podologapachuca.com.`,
+          html: `
+            <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a;">
+              <h2 style="margin:0 0 16px;">Gracias por reservar tu cita</h2>
+              <p>Hola ${name.trim()},</p>
+              <p>Recibimos tu solicitud de cita para el <strong>${localizedDate}</strong> a las <strong>${localizedTime}</strong>.</p>
+              <p>Nos pondremos en contacto contigo para confirmar la reservación y darte seguimiento.</p>
+              <p>Si tienes dudas adicionales, puedes escribirnos a <strong>contacto@podologapachuca.com</strong>.</p>
+            </div>
+          `,
+        });
+      } catch (error) {
+        return {
+          sent: false,
+          reason: error instanceof Error ? error.message : "No fue posible enviar el correo al paciente.",
+        };
+      }
+    })();
+
+    await appointmentRef.update({
+      adminEmailStatus: adminEmailResult.sent ? "sent" : adminEmailResult.reason === "not_configured" ? "not_configured" : "failed",
+      adminEmailSentAt: adminEmailResult.sent ? FieldValue.serverTimestamp() : null,
+      adminEmailProvider: adminEmailResult.sent ? adminEmailResult.provider ?? "resend" : "resend",
+      adminEmailProviderId: adminEmailResult.sent ? adminEmailResult.providerId ?? "" : "",
+      adminEmailError: adminEmailResult.sent ? "" : adminEmailResult.reason ?? "",
+      patientEmailStatus: patientEmailResult.sent ? "sent" : patientEmailResult.reason === "not_configured" ? "not_configured" : "failed",
+      patientEmailSentAt: patientEmailResult.sent ? FieldValue.serverTimestamp() : null,
+      patientEmailProvider: patientEmailResult.sent ? patientEmailResult.provider ?? "resend" : "resend",
+      patientEmailProviderId: patientEmailResult.sent ? patientEmailResult.providerId ?? "" : "",
+      patientEmailError: patientEmailResult.sent ? "" : patientEmailResult.reason ?? "",
+    });
+
+    return {
+      appointmentId: appointmentRef.id,
+      patientId: patient.uid,
+      patientCreated: patient.created,
+      message: "Tu solicitud de cita fue registrada correctamente.",
+      adminEmailSent: adminEmailResult.sent,
+      patientEmailSent: patientEmailResult.sent,
+    };
   }
-
-  await assertSlotAvailable({ date, time });
-
-  const db = getFirestore();
-  const patient = await findOrCreatePatientProfile({
-    email,
-    name,
-    source: "booking",
-  });
-
-  const scheduledAt = new Date(`${date}T${time}:00`);
-
-  if (Number.isNaN(scheduledAt.getTime())) {
-    throw new HttpsError("invalid-argument", "La fecha u hora de la cita no son válidas.");
-  }
-
-  const appointmentRef = await db.collection("appointments").add({
-    userId: patient.uid,
-    patientName: name.trim(),
-    patientEmail: email.trim().toLowerCase(),
-    patientPhone: "",
-    scheduledDate: date,
-    scheduledTime: time,
-    scheduledAt,
-    reason: message?.trim() || "Solicitud desde formulario público",
-    notes: message?.trim() || "",
-    status: "pending",
-    source: "booking",
-    slotDurationMinutes: SLOT_DURATION_MINUTES,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-
-  return {
-    appointmentId: appointmentRef.id,
-    patientId: patient.uid,
-    patientCreated: patient.created,
-    message: "Tu solicitud de cita fue registrada correctamente.",
-  };
-});
+);
 
 export const createAdminAppointment = onCall(async (request) => {
   if (!request.auth?.uid) {
