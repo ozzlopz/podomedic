@@ -80,6 +80,11 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /products/{productId} {
+      allow read: if isAdmin() || resource.data.activeInStore == true;
+      allow create, update, delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

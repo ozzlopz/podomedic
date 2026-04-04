@@ -24,3 +24,13 @@ export async function uploadBlogImage(file: File, folder: 'covers' | 'inline') {
   await uploadBytes(storageRef, file);
   return getDownloadURL(storageRef);
 }
+
+export async function uploadProductImage(file: File) {
+  if (!storage) {
+    throw new Error('Firebase Storage no está disponible.');
+  }
+
+  const storageRef = ref(storage, `product-images/${sanitizeFileName(file.name)}`);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
+}
