@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { collection, doc, getDoc, getDocs, orderBy, query, setDoc, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { ArrowRight, BadgeCheck, CalendarDays, Clock3, Lock, PlusCircle, Unlock } from 'lucide-react';
 import { db, functions } from '@/lib/firebase';
-import { extractScheduledDateAndTime, getTimeSlotsForDay } from '@/lib/booking';
+import { addMinutesToTime, defaultWeeklySchedule, extractScheduledDateAndTime, getAvailableSlotsForDay, mergeWeeklySchedule, type TimeRange, type WeeklySchedule } from '@/lib/booking';
 
 type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
@@ -33,8 +33,20 @@ type Patient = {
 type AppointmentBlock = {
   id: string;
   date?: string;
+  startTime?: string;
+  endTime?: string;
   time?: string;
   reason?: string;
+};
+
+const dayLabelsByKey: Record<string, string> = {
+  '0': 'Domingo',
+  '1': 'Lunes',
+  '2': 'Martes',
+  '3': 'Miércoles',
+  '4': 'Jueves',
+  '5': 'Viernes',
+  '6': 'Sábado',
 };
 
 const initialForm = {
@@ -48,7 +60,8 @@ const initialForm = {
 
 const initialBlockForm = {
   date: '',
-  time: '',
+  startTime: '',
+  endTime: '',
   reason: '',
 };
 
@@ -65,6 +78,11 @@ export default function AdminAppointmentsPage() {
   const [submitSuccess, setSubmitSuccess] = useState('');
   const [blockError, setBlockError] = useState('');
   const [blockSuccess, setBlockSuccess] = useState('');
+  const [schedule, setSchedule] = useState<WeeklySchedule>(defaultWeeklySchedule);
+  const [scheduleLoading, setScheduleLoading] = useState(true);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const [scheduleSuccess, setScheduleSuccess] = useState('');
   const [form, setForm] = useState(initialForm);
   const [blockForm, setBlockForm] = useState(initialBlockForm);
 
@@ -104,7 +122,10 @@ export default function AdminAppointmentsPage() {
           id: docItem.id,
           ...docItem.data(),
         })) as AppointmentBlock[]).sort((left, right) =>
-          `${left.date ?? ''} ${left.time ?? ''}`.localeCompare(`${right.date ?? ''} ${right.time ?? ''}`, 'es'),
+          `${left.date ?? ''} ${left.startTime ?? left.time ?? ''}`.localeCompare(
+            `${right.date ?? ''} ${right.startTime ?? right.time ?? ''}`,
+            'es',
+          ),
         ),
       );
       setError('');
@@ -115,66 +136,82 @@ export default function AdminAppointmentsPage() {
     }
   };
 
+  const loadSchedule = async () => {
+    if (!db) {
+      setScheduleLoading(false);
+      return;
+    }
+
+    try {
+      const scheduleSnapshot = await getDoc(doc(db, 'booking_settings', 'schedule'));
+      setSchedule(mergeWeeklySchedule((scheduleSnapshot.data()?.days as Partial<WeeklySchedule> | undefined) ?? undefined));
+      setScheduleError('');
+    } catch {
+      setScheduleError('No fue posible cargar el horario semanal.');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadAppointments();
+    loadSchedule();
   }, []);
 
+  const getExclusionRangesForDate = useCallback((dateValue: string): TimeRange[] => {
+    const appointmentRanges = appointments.flatMap<TimeRange>((appointment) => {
+      const scheduled = extractScheduledDateAndTime(appointment);
+
+      if (scheduled.date !== dateValue || (appointment.status ?? 'pending') === 'cancelled' || !scheduled.time) {
+        return [];
+      }
+
+      return [{
+        startTime: scheduled.time,
+        endTime: addMinutesToTime(scheduled.time, 90),
+      }];
+    });
+
+    const blockRanges = blocks.flatMap<TimeRange>((block) => {
+      if (block.date !== dateValue) {
+        return [];
+      }
+
+      const startTime = block.startTime ?? block.time;
+      const endTime = block.endTime ?? (block.time ? addMinutesToTime(block.time, 90) : '');
+
+      return startTime && endTime ? [{ startTime, endTime }] : [];
+    });
+
+    return [...appointmentRanges, ...blockRanges];
+  }, [appointments, blocks]);
+
   const appointmentSlots = useMemo(
-    () => (form.date ? getTimeSlotsForDay(new Date(`${form.date}T00:00:00`).getDay()) : []),
-    [form.date],
+    () =>
+      form.date
+        ? getAvailableSlotsForDay(new Date(`${form.date}T00:00:00`).getDay(), getExclusionRangesForDate(form.date), schedule)
+        : [],
+    [form.date, getExclusionRangesForDate, schedule],
   );
-  const blockSlots = useMemo(
-    () => (blockForm.date ? getTimeSlotsForDay(new Date(`${blockForm.date}T00:00:00`).getDay()) : []),
-    [blockForm.date],
+  const blockPreviewSlots = useMemo(
+    () =>
+      blockForm.date
+        ? getAvailableSlotsForDay(new Date(`${blockForm.date}T00:00:00`).getDay(), getExclusionRangesForDate(blockForm.date), schedule)
+        : [],
+    [blockForm.date, getExclusionRangesForDate, schedule],
   );
-  const unavailableAppointmentSlots = useMemo(() => {
-    if (!form.date) return new Set<string>();
-
-    const occupied = appointments
-      .filter((appointment) => {
-        const scheduled = extractScheduledDateAndTime(appointment);
-        return scheduled.date === form.date && (appointment.status ?? 'pending') !== 'cancelled';
-      })
-      .map((appointment) => extractScheduledDateAndTime(appointment).time)
-      .filter((time): time is string => Boolean(time));
-
-    const blocked = blocks
-      .filter((block) => block.date === form.date)
-      .map((block) => block.time)
-      .filter((time): time is string => Boolean(time));
-
-    return new Set<string>([...occupied, ...blocked]);
-  }, [appointments, blocks, form.date]);
-  const unavailableBlockSlots = useMemo(() => {
-    if (!blockForm.date) return new Set<string>();
-
-    const occupied = appointments
-      .filter((appointment) => {
-        const scheduled = extractScheduledDateAndTime(appointment);
-        return scheduled.date === blockForm.date && (appointment.status ?? 'pending') !== 'cancelled';
-      })
-      .map((appointment) => extractScheduledDateAndTime(appointment).time)
-      .filter((time): time is string => Boolean(time));
-
-    const blocked = blocks
-      .filter((block) => block.date === blockForm.date)
-      .map((block) => block.time)
-      .filter((time): time is string => Boolean(time));
-
-    return new Set<string>([...occupied, ...blocked]);
-  }, [appointments, blocks, blockForm.date]);
 
   useEffect(() => {
-    if (form.time && unavailableAppointmentSlots.has(form.time)) {
+    if (form.time && !appointmentSlots.includes(form.time)) {
       setForm((current) => ({ ...current, time: '' }));
     }
-  }, [form.time, unavailableAppointmentSlots]);
+  }, [appointmentSlots, form.time]);
 
   useEffect(() => {
-    if (blockForm.time && unavailableBlockSlots.has(blockForm.time)) {
-      setBlockForm((current) => ({ ...current, time: '' }));
+    if (blockForm.startTime && !blockPreviewSlots.includes(blockForm.startTime)) {
+      setBlockForm((current) => ({ ...current, startTime: '' }));
     }
-  }, [blockForm.time, unavailableBlockSlots]);
+  }, [blockForm.startTime, blockPreviewSlots]);
 
   const handleCreateAppointment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -267,6 +304,45 @@ export default function AdminAppointmentsPage() {
       setBlockError(message);
     } finally {
       setRemovingBlockId('');
+    }
+  };
+
+  const handleSaveSchedule = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!db) {
+      setScheduleError('No se pudo conectar con Firestore.');
+      return;
+    }
+
+    const hasInvalidDay = Object.values(schedule).some(
+      (dayConfig) => dayConfig.enabled && dayConfig.openTime >= dayConfig.closeTime,
+    );
+
+    if (hasInvalidDay) {
+      setScheduleError('Cada día activo debe tener una hora de apertura anterior a la de cierre.');
+      setScheduleSuccess('');
+      return;
+    }
+
+    setSavingSchedule(true);
+    setScheduleError('');
+    setScheduleSuccess('');
+
+    try {
+      await setDoc(
+        doc(db, 'booking_settings', 'schedule'),
+        {
+          days: schedule,
+          updatedAt: new Date(),
+        },
+        { merge: true },
+      );
+      setScheduleSuccess('Horario semanal actualizado correctamente.');
+    } catch {
+      setScheduleError('No fue posible guardar el horario semanal.');
+    } finally {
+      setSavingSchedule(false);
     }
   };
 
@@ -385,6 +461,104 @@ export default function AdminAppointmentsPage() {
 
         <div className="space-y-6">
           <section className="rounded-[2rem] border border-slate-200/80 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+            <h2 className="text-2xl font-black text-slate-950">Horario semanal</h2>
+            <p className="mt-2 text-slate-600">
+              Ajusta apertura y cierre por día. Si activas domingo, el booking público también podrá ofrecer citas ese día.
+            </p>
+
+            <form onSubmit={handleSaveSchedule} className="mt-8 space-y-4">
+              {Object.entries(schedule).map(([dayKey, dayConfig]) => (
+                <div
+                  key={dayKey}
+                  className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)] lg:items-center"
+                >
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={dayConfig.enabled}
+                      onChange={(event) =>
+                        setSchedule((current) => ({
+                          ...current,
+                          [dayKey]: {
+                            ...current[dayKey],
+                            enabled: event.target.checked,
+                          },
+                        }))
+                      }
+                      className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                    />
+                    <span className="font-semibold text-slate-900">{dayLabelsByKey[dayKey]}</span>
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-700">Apertura</span>
+                    <input
+                      type="time"
+                      value={dayConfig.openTime}
+                      disabled={!dayConfig.enabled}
+                      onChange={(event) =>
+                        setSchedule((current) => ({
+                          ...current,
+                          [dayKey]: {
+                            ...current[dayKey],
+                            openTime: event.target.value,
+                          },
+                        }))
+                      }
+                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-700">Cierre</span>
+                    <input
+                      type="time"
+                      value={dayConfig.closeTime}
+                      disabled={!dayConfig.enabled}
+                      onChange={(event) =>
+                        setSchedule((current) => ({
+                          ...current,
+                          [dayKey]: {
+                            ...current[dayKey],
+                            closeTime: event.target.value,
+                          },
+                        }))
+                      }
+                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                    />
+                  </label>
+                </div>
+              ))}
+
+              {scheduleLoading && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Cargando horario semanal...
+                </div>
+              )}
+
+              {scheduleError && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                  {scheduleError}
+                </div>
+              )}
+
+              {scheduleSuccess && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  {scheduleSuccess}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={savingSchedule || scheduleLoading}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingSchedule ? 'Guardando horario...' : 'Guardar horario semanal'}
+              </button>
+            </form>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200/80 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                 <PlusCircle className="h-5 w-5" />
@@ -431,20 +605,16 @@ export default function AdminAppointmentsPage() {
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   {appointmentSlots.length > 0 ? (
                     appointmentSlots.map((slot) => {
-                      const isUnavailable = unavailableAppointmentSlots.has(slot);
                       const isSelected = form.time === slot;
                       return (
                         <button
                           key={slot}
                           type="button"
-                          disabled={isUnavailable}
                           onClick={() => setForm((current) => ({ ...current, time: slot }))}
                           className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
                             isSelected
                               ? 'border-slate-950 bg-slate-950 text-white shadow-lg shadow-slate-950/15'
-                              : isUnavailable
-                                ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                                : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700'
+                              : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700'
                           }`}
                         >
                           {slot}
@@ -550,36 +720,58 @@ export default function AdminAppointmentsPage() {
               </label>
 
               <div>
-                <span className="text-sm font-semibold text-slate-700">Bloque horario</span>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  {blockSlots.length > 0 ? (
-                    blockSlots.map((slot) => {
-                      const isUnavailable = unavailableBlockSlots.has(slot);
-                      const isSelected = blockForm.time === slot;
-                      return (
-                        <button
-                          key={slot}
-                          type="button"
-                          disabled={isUnavailable}
-                          onClick={() => setBlockForm((current) => ({ ...current, time: slot }))}
-                          className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                            isSelected
-                              ? 'border-slate-950 bg-slate-950 text-white shadow-lg shadow-slate-950/15'
-                              : isUnavailable
-                                ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                                : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700'
-                          }`}
-                        >
-                          {slot}
-                        </button>
-                      );
-                    })
+                <span className="text-sm font-semibold text-slate-700">Huecos actuales del día</span>
+                <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  {blockForm.date ? (
+                    blockPreviewSlots.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {blockPreviewSlots.map((slot) => (
+                          <button
+                            key={slot}
+                            type="button"
+                            onClick={() =>
+                              setBlockForm((current) => ({
+                                ...current,
+                                startTime: slot,
+                                endTime: current.endTime && current.endTime > slot ? current.endTime : addMinutesToTime(slot, 90),
+                              }))
+                            }
+                            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-cyan-300 hover:text-cyan-700"
+                          >
+                            {slot}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      'No quedan huecos configurables en esa fecha.'
+                    )
                   ) : (
-                    <div className="col-span-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                      Selecciona una fecha laborable para ver bloques bloqueables.
-                    </div>
+                    'Selecciona una fecha para ver los huecos disponibles antes de bloquear.'
                   )}
                 </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Inicio del bloqueo</span>
+                  <input
+                    type="time"
+                    required
+                    value={blockForm.startTime}
+                    onChange={(event) => setBlockForm((current) => ({ ...current, startTime: event.target.value }))}
+                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Fin del bloqueo</span>
+                  <input
+                    type="time"
+                    required
+                    value={blockForm.endTime}
+                    onChange={(event) => setBlockForm((current) => ({ ...current, endTime: event.target.value }))}
+                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+                  />
+                </label>
               </div>
 
               <label className="block">
@@ -606,7 +798,7 @@ export default function AdminAppointmentsPage() {
 
               <button
                 type="submit"
-                disabled={blocking || !blockForm.time}
+                disabled={blocking || !blockForm.startTime || !blockForm.endTime}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Lock className="h-4 w-4" />
@@ -628,7 +820,7 @@ export default function AdminAppointmentsPage() {
                   >
                     <div>
                       <p className="font-semibold text-slate-950">
-                        {block.date ?? 'Sin fecha'} · {block.time ?? 'Sin hora'}
+                        {block.date ?? 'Sin fecha'} · {block.startTime ?? block.time ?? 'Sin inicio'} - {block.endTime ?? (block.time ? addMinutesToTime(block.time, 90) : 'Sin fin')}
                       </p>
                       <p className="mt-1 text-sm text-slate-600">{block.reason || 'Sin motivo especificado'}</p>
                     </div>

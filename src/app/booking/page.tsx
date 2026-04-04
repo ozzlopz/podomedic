@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { Calendar, Clock, User, Mail, MessageSquare, CheckCircle, ArrowRight, ShieldCheck, Stethoscope, ChevronLeft, ChevronRight } from 'lucide-react';
 import { functions } from '@/lib/firebase';
-import { formatDateValue, getTimeSlotsForDay, normalizeDateValue } from '@/lib/booking';
+import { defaultWeeklySchedule, formatDateValue, mergeWeeklySchedule, normalizeDateValue, type WeeklySchedule } from '@/lib/booking';
 
 const dayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] as const;
 const monthLabels = [
@@ -24,10 +24,12 @@ const monthLabels = [
 ] as const;
 
 type AvailabilityResponse = {
+  slots: string[];
   availableSlots: string[];
   blockedSlots: string[];
   occupiedSlots: string[];
   slotDurationMinutes: number;
+  schedule?: WeeklySchedule;
 };
 
 export default function Booking() {
@@ -38,10 +40,41 @@ export default function Booking() {
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState('');
+  const [weeklySchedule, setWeeklySchedule] = useState<WeeklySchedule>(defaultWeeklySchedule);
   const [displayedMonth, setDisplayedMonth] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
+
+  useEffect(() => {
+    if (!functions) {
+      return;
+    }
+
+    const currentFunctions = functions;
+
+    let isActive = true;
+
+    const loadSchedule = async () => {
+      try {
+        const getSchedule = httpsCallable<undefined, { schedule?: WeeklySchedule }>(currentFunctions, 'getBookingSchedule');
+        const response = await getSchedule(undefined);
+
+        if (!isActive) return;
+
+        setWeeklySchedule(mergeWeeklySchedule(response.data.schedule));
+      } catch {
+        if (!isActive) return;
+        setWeeklySchedule(defaultWeeklySchedule);
+      }
+    };
+
+    void loadSchedule();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const today = normalizeDateValue(new Date());
   const monthStart = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth(), 1);
@@ -51,8 +84,7 @@ export default function Booking() {
 
   const selectedDate = form.date ? normalizeDateValue(new Date(`${form.date}T00:00:00`)) : null;
   const selectedDay = selectedDate?.getDay();
-  const availableTimeSlots = availability?.availableSlots ?? [];
-  const allTimeSlots = useMemo(() => (selectedDate ? getTimeSlotsForDay(selectedDate.getDay()) : []), [selectedDate]);
+  const allTimeSlots = useMemo(() => availability?.slots ?? [], [availability?.slots]);
 
   const calendarDays = Array.from({ length: 35 }, (_, index) => {
     const date = new Date(calendarStart);
@@ -100,6 +132,7 @@ export default function Booking() {
         if (!isActive) return;
 
         setAvailability(response.data);
+        setWeeklySchedule(mergeWeeklySchedule(response.data.schedule));
         setForm((current) =>
           current.time && !response.data.availableSlots.includes(current.time)
             ? { ...current, time: '' }
@@ -334,8 +367,9 @@ export default function Booking() {
                         const normalizedDate = normalizeDateValue(date);
                         const isCurrentMonth = date.getMonth() === displayedMonth.getMonth();
                         const isPast = normalizedDate < today;
-                        const isSunday = date.getDay() === 0;
-                        const isDisabled = !isCurrentMonth || isPast || isSunday;
+                        const dayConfig = weeklySchedule[String(date.getDay())];
+                        const isClosedDay = !dayConfig?.enabled;
+                        const isDisabled = !isCurrentMonth || isPast || isClosedDay;
                         const isSelected =
                           selectedDate && normalizedDate.getTime() === selectedDate.getTime();
 
@@ -391,40 +425,29 @@ export default function Booking() {
                         <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
                           {availabilityError}
                         </div>
-                      ) : allTimeSlots.length > 0 ? (
+                    ) : allTimeSlots.length > 0 ? (
                         <div className="mt-5 grid grid-cols-2 gap-3">
                           {allTimeSlots.map((slot) => {
                             const isSelected = form.time === slot;
-                            const isAvailable = availableTimeSlots.includes(slot);
-                            const isBlocked = availability?.blockedSlots.includes(slot);
-                            const isOccupied = availability?.occupiedSlots.includes(slot);
                             return (
                               <button
                                 key={slot}
                                 type="button"
-                                disabled={!isAvailable}
                                 onClick={() => setForm((current) => ({ ...current, time: slot }))}
                                 className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
                                   isSelected
                                     ? 'border-slate-950 bg-slate-950 text-white shadow-lg shadow-slate-950/15'
-                                    : !isAvailable
-                                      ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700'
+                                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700'
                                 }`}
                               >
                                 <span className="block">{slot}</span>
-                                {!isAvailable && (
-                                  <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
-                                    {isBlocked ? 'Bloqueado' : isOccupied ? 'Reservado' : 'No disponible'}
-                                  </span>
-                                )}
                               </button>
                             );
                           })}
                         </div>
                       ) : (
                         <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                          No hay horarios configurados para ese día.
+                          No hay bloques disponibles para ese día.
                         </div>
                       )
                     ) : (

@@ -3,7 +3,18 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { randomBytes } from "node:crypto";
-import { getTimeSlotsForDate, isValidTimeSlot, SLOT_DURATION_MINUTES } from "./booking";
+import {
+  addMinutesToTime,
+  defaultWeeklySchedule,
+  getAvailableSlotsForDate,
+  getWorkingRangesForDate,
+  mergeWeeklySchedule,
+  rangesOverlap,
+  SLOT_DURATION_MINUTES,
+  timeToMinutes,
+  type TimeRange,
+  type WeeklySchedule,
+} from "./booking";
 
 initializeApp();
 
@@ -49,6 +60,26 @@ function formatTimeFromDate(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+async function getAppointmentSchedule() {
+  const db = getFirestore();
+  const scheduleSnapshot = await db.collection("booking_settings").doc("schedule").get();
+
+  if (!scheduleSnapshot.exists) {
+    return defaultWeeklySchedule;
+  }
+
+  return mergeWeeklySchedule(scheduleSnapshot.data()?.days as Partial<WeeklySchedule> | undefined);
+}
+
+export const getBookingSchedule = onCall(async () => {
+  const schedule = await getAppointmentSchedule();
+
+  return {
+    schedule,
+    slotDurationMinutes: SLOT_DURATION_MINUTES,
+  };
+});
+
 async function assertSlotAvailable(params: {
   date: string;
   time: string;
@@ -56,11 +87,9 @@ async function assertSlotAvailable(params: {
 }) {
   const db = getFirestore();
   const { start, end } = getDayBounds(params.date);
+  const schedule = await getAppointmentSchedule();
 
-  if (!isValidTimeSlot(params.date, params.time)) {
-    throw new HttpsError("invalid-argument", "La hora seleccionada no pertenece a un bloque disponible de 90 minutos.");
-  }
-
+  const requestedEndTime = addMinutesToTime(params.time, SLOT_DURATION_MINUTES);
   const [appointmentsSnapshot, blockedSlotsSnapshot] = await Promise.all([
     db.collection("appointments")
       .where("scheduledAt", ">=", start)
@@ -68,7 +97,6 @@ async function assertSlotAvailable(params: {
       .get(),
     db.collection("appointment_blocks")
       .where("date", "==", params.date)
-      .where("time", "==", params.time)
       .get(),
   ]);
 
@@ -92,8 +120,54 @@ async function assertSlotAvailable(params: {
     throw new HttpsError("already-exists", "Ese horario ya fue reservado.");
   }
 
-  if (!blockedSlotsSnapshot.empty) {
+  const blockRanges = blockedSlotsSnapshot.docs.flatMap<TimeRange>((docItem) => {
+    const data = docItem.data();
+    const blockStart = typeof data?.startTime === "string" ? data.startTime : data?.time;
+    const blockEnd = typeof data?.endTime === "string"
+      ? data.endTime
+      : typeof data?.time === "string"
+        ? addMinutesToTime(data.time, SLOT_DURATION_MINUTES)
+        : "";
+
+    return Boolean(blockStart) && Boolean(blockEnd)
+      ? [{ startTime: blockStart, endTime: blockEnd }]
+      : [];
+  });
+
+  if (blockRanges.some((range) => rangesOverlap(params.time, requestedEndTime, range.startTime, range.endTime))) {
     throw new HttpsError("failed-precondition", "Ese horario fue bloqueado por administración.");
+  }
+
+  const occupiedRanges = appointmentsSnapshot.docs.flatMap<TimeRange>((docItem) => {
+    if (params.excludeAppointmentId && docItem.id === params.excludeAppointmentId) {
+      return [];
+    }
+
+    const data = docItem.data();
+
+    if (data?.status === "cancelled") {
+      return [];
+    }
+
+    const appointmentStart =
+      typeof data?.scheduledTime === "string"
+        ? data.scheduledTime
+        : data?.scheduledAt?.toDate
+          ? formatTimeFromDate(data.scheduledAt.toDate())
+          : "";
+
+    return appointmentStart
+      ? [{
+          startTime: appointmentStart,
+          endTime: addMinutesToTime(appointmentStart, SLOT_DURATION_MINUTES),
+        }]
+      : [];
+  });
+
+  const availableSlots = getAvailableSlotsForDate(params.date, [...occupiedRanges, ...blockRanges], schedule);
+
+  if (!availableSlots.includes(params.time)) {
+    throw new HttpsError("failed-precondition", "La hora seleccionada ya no está disponible.");
   }
 }
 
@@ -509,13 +583,14 @@ export const getBookingAvailability = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "Debes indicar una fecha.");
   }
 
-  const slots: string[] = getTimeSlotsForDate(date);
+  const schedule = await getAppointmentSchedule();
+  const workingRanges = getWorkingRangesForDate(date, schedule);
 
-  if (slots.length === 0) {
+  if (workingRanges.length === 0) {
     return {
       date,
       slotDurationMinutes: SLOT_DURATION_MINUTES,
-      slots,
+      slots: [] as string[],
       availableSlots: [] as string[],
       occupiedSlots: [] as string[],
       blockedSlots: [] as string[],
@@ -534,33 +609,63 @@ export const getBookingAvailability = onCall(async (request) => {
       .get(),
   ]);
 
-  const occupiedSlots = new Set(
-    appointmentsSnapshot.docs
-      .filter((docItem) => docItem.data()?.status !== "cancelled")
-      .map((docItem) => {
-        const data = docItem.data();
-        return typeof data?.scheduledTime === "string"
-          ? data.scheduledTime
-          : data?.scheduledAt?.toDate
-            ? formatTimeFromDate(data.scheduledAt.toDate())
-            : "";
-      })
-      .filter((timeValue): timeValue is string => Boolean(timeValue)),
-  );
+  const occupiedRanges = appointmentsSnapshot.docs.flatMap<TimeRange>((docItem) => {
+    if (docItem.data()?.status === "cancelled") return [];
 
+    const data = docItem.data();
+    const appointmentStart = typeof data?.scheduledTime === "string"
+      ? data.scheduledTime
+      : data?.scheduledAt?.toDate
+        ? formatTimeFromDate(data.scheduledAt.toDate())
+        : "";
+
+    return appointmentStart
+      ? [{ startTime: appointmentStart, endTime: addMinutesToTime(appointmentStart, SLOT_DURATION_MINUTES) }]
+      : [];
+  });
+
+  const blockedRanges = blockedSlotsSnapshot.docs
+    .map((docItem) => {
+      const data = docItem.data();
+      const startTime = typeof data?.startTime === "string" ? data.startTime : data?.time;
+      const endTime = typeof data?.endTime === "string"
+        ? data.endTime
+        : typeof data?.time === "string"
+          ? addMinutesToTime(data.time, SLOT_DURATION_MINUTES)
+          : "";
+
+      return {
+        startTime,
+        endTime,
+      };
+    })
+    .filter(
+      (block): block is { startTime: string; endTime: string } =>
+        Boolean(block.startTime) && Boolean(block.endTime),
+    );
+  const availableSlots = getAvailableSlotsForDate(date, [...occupiedRanges, ...blockedRanges], schedule);
+  const occupiedSlots = new Set(
+    occupiedRanges
+      .flatMap((range) => getAvailableSlotsForDate(date, blockedRanges).filter((slot) =>
+        rangesOverlap(slot, addMinutesToTime(slot, SLOT_DURATION_MINUTES), range.startTime, range.endTime),
+      )),
+  );
   const blockedSlots = new Set(
-    blockedSlotsSnapshot.docs
-      .map((docItem) => docItem.data()?.time)
-      .filter((timeValue): timeValue is string => Boolean(timeValue)),
+    blockedRanges.flatMap((range) =>
+      getAvailableSlotsForDate(date, occupiedRanges).filter((slot) =>
+        rangesOverlap(slot, addMinutesToTime(slot, SLOT_DURATION_MINUTES), range.startTime, range.endTime),
+      ),
+    ),
   );
 
   return {
     date,
     slotDurationMinutes: SLOT_DURATION_MINUTES,
-    slots,
-    availableSlots: slots.filter((slot) => !occupiedSlots.has(slot) && !blockedSlots.has(slot)),
-    occupiedSlots: slots.filter((slot) => occupiedSlots.has(slot)),
-    blockedSlots: slots.filter((slot) => blockedSlots.has(slot)),
+    slots: availableSlots,
+    availableSlots,
+    occupiedSlots: [...occupiedSlots],
+    blockedSlots: [...blockedSlots],
+    schedule,
   };
 });
 
@@ -571,22 +676,98 @@ export const createAppointmentBlock = onCall(async (request) => {
 
   await assertAdmin(request.auth.uid);
 
-  const { date, time, reason } = request.data as {
+  const { date, startTime, endTime, reason } = request.data as {
     date?: string;
-    time?: string;
+    startTime?: string;
+    endTime?: string;
     reason?: string;
   };
 
-  if (!date || !time) {
-    throw new HttpsError("invalid-argument", "Fecha y hora son obligatorias.");
+  if (!date || !startTime || !endTime) {
+    throw new HttpsError("invalid-argument", "Fecha, hora de inicio y hora de fin son obligatorias.");
   }
 
-  await assertSlotAvailable({ date, time });
+  const schedule = await getAppointmentSchedule();
+  const workingRanges = getWorkingRangesForDate(date, schedule);
+
+  if (workingRanges.length === 0) {
+    throw new HttpsError("failed-precondition", "No hay horarios configurados para esa fecha.");
+  }
+
+  if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
+    throw new HttpsError("invalid-argument", "El rango de bloqueo es inválido.");
+  }
 
   const db = getFirestore();
+  const { start, end } = getDayBounds(date);
+  const [appointmentsSnapshot, existingBlocksSnapshot] = await Promise.all([
+    db.collection("appointments").where("scheduledAt", ">=", start).where("scheduledAt", "<=", end).get(),
+    db.collection("appointment_blocks").where("date", "==", date).get(),
+  ]);
+
+  const effectiveBlockRange = { startTime, endTime };
+
+  const validSlotStarts = getAvailableSlotsForDate(
+    date,
+    appointmentsSnapshot.docs.flatMap<TimeRange>((docItem) => {
+      const data = docItem.data();
+      if (data?.status === "cancelled") return [];
+      const appointmentStart = typeof data?.scheduledTime === "string"
+        ? data.scheduledTime
+        : data?.scheduledAt?.toDate
+          ? formatTimeFromDate(data.scheduledAt.toDate())
+          : "";
+
+      return appointmentStart
+        ? [{ startTime: appointmentStart, endTime: addMinutesToTime(appointmentStart, SLOT_DURATION_MINUTES) }]
+        : [];
+    }),
+    schedule,
+  ).filter((slot) =>
+    rangesOverlap(slot, addMinutesToTime(slot, SLOT_DURATION_MINUTES), effectiveBlockRange.startTime, effectiveBlockRange.endTime),
+  );
+
+  if (validSlotStarts.length === 0) {
+    throw new HttpsError("invalid-argument", "El rango no bloquea ningún horario configurable.");
+  }
+
+  const conflictsWithAppointments = appointmentsSnapshot.docs.some((docItem) => {
+    const data = docItem.data();
+    if (data?.status === "cancelled") return false;
+    const appointmentStart =
+      typeof data?.scheduledTime === "string"
+        ? data.scheduledTime
+        : data?.scheduledAt?.toDate
+          ? formatTimeFromDate(data.scheduledAt.toDate())
+          : "";
+
+    return Boolean(appointmentStart) &&
+      rangesOverlap(appointmentStart, addMinutesToTime(appointmentStart, SLOT_DURATION_MINUTES), startTime, endTime);
+  });
+
+  if (conflictsWithAppointments) {
+    throw new HttpsError("failed-precondition", "El rango se cruza con una cita ya registrada.");
+  }
+
+  const conflictsWithBlocks = existingBlocksSnapshot.docs.some((docItem) => {
+    const data = docItem.data();
+    const existingStart = typeof data?.startTime === "string" ? data.startTime : data?.time;
+    const existingEnd = typeof data?.endTime === "string"
+      ? data.endTime
+      : typeof data?.time === "string"
+        ? addMinutesToTime(data.time, SLOT_DURATION_MINUTES)
+        : "";
+
+    return Boolean(existingStart) && Boolean(existingEnd) && rangesOverlap(existingStart, existingEnd, startTime, endTime);
+  });
+
+  if (conflictsWithBlocks) {
+    throw new HttpsError("already-exists", "Ya existe un bloqueo que se cruza con ese rango.");
+  }
   const blockRef = await db.collection("appointment_blocks").add({
     date,
-    time,
+    startTime,
+    endTime,
     reason: reason?.trim() || "",
     createdBy: request.auth.uid,
     slotDurationMinutes: SLOT_DURATION_MINUTES,

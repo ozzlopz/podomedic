@@ -75,6 +75,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /booking_settings/{documentId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if false;
+    }
+
     match /consultations/{consultationId} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create, update, delete: if isAdmin();
