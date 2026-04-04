@@ -101,7 +101,7 @@ export default function BlogDetailPage() {
               {post.excerpt && <p className="mt-5 text-lg leading-relaxed text-slate-600">{post.excerpt}</p>}
 
               <div
-                className="mt-10 [&_.ProseMirror-youtube-iframe]:aspect-video [&_.ProseMirror-youtube-iframe]:w-full [&_a]:text-cyan-700 [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-200 [&_blockquote]:pl-4 [&_blockquote]:italic [&_h1]:mt-8 [&_h1]:text-4xl [&_h1]:font-black [&_h2]:mt-8 [&_h2]:text-3xl [&_h2]:font-black [&_h3]:mt-6 [&_h3]:text-2xl [&_h3]:font-bold [&_img]:my-6 [&_img]:rounded-3xl [&_img]:shadow-md [&_li]:ml-5 [&_ol]:list-decimal [&_p]:mt-4 [&_p]:leading-relaxed [&_ul]:list-disc"
+                className="mt-10 text-slate-800 [&_*]:text-inherit [&_.ProseMirror-youtube-iframe]:aspect-video [&_.ProseMirror-youtube-iframe]:w-full [&_a]:text-cyan-700 [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-200 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_em]:text-slate-800 [&_h1]:mt-8 [&_h1]:text-4xl [&_h1]:font-black [&_h1]:text-slate-950 [&_h2]:mt-8 [&_h2]:text-3xl [&_h2]:font-black [&_h2]:text-slate-950 [&_h3]:mt-6 [&_h3]:text-2xl [&_h3]:font-bold [&_h3]:text-slate-950 [&_img]:my-6 [&_img]:rounded-3xl [&_img]:shadow-md [&_li]:ml-5 [&_li]:text-slate-800 [&_ol]:list-decimal [&_p]:mt-4 [&_p]:leading-relaxed [&_p]:text-slate-800 [&_strong]:text-slate-950 [&_ul]:list-disc"
                 dangerouslySetInnerHTML={{ __html: post.contentHtml ?? '<p>Sin contenido.</p>' }}
               />
             </div>

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { CalendarDays, ArrowRight, Search } from 'lucide-react';
 import { db } from '@/lib/firebase';
 
@@ -22,6 +22,7 @@ type BlogSort = 'recent' | 'oldest' | 'title';
 export default function BlogPage() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<BlogSort>('recent');
 
@@ -33,15 +34,16 @@ export default function BlogPage() {
       }
 
       try {
-        const snapshot = await getDocs(
-          query(collection(db, 'blog_posts'), where('published', '==', true), orderBy('publishedAt', 'desc')),
-        );
+        const snapshot = await getDocs(query(collection(db, 'blog_posts'), where('published', '==', true)));
         setPosts(
           snapshot.docs.map((docItem) => ({
             id: docItem.id,
             ...docItem.data(),
           })) as BlogPost[],
         );
+        setError('');
+      } catch {
+        setError('No fue posible cargar los artículos publicados.');
       } finally {
         setLoading(false);
       }
@@ -59,7 +61,9 @@ export default function BlogPage() {
 
     const sortedPosts = [...nextPosts];
 
-    if (sortBy === 'oldest') {
+    if (sortBy === 'recent') {
+      sortedPosts.sort((a, b) => (b.publishedAt?.seconds ?? 0) - (a.publishedAt?.seconds ?? 0));
+    } else if (sortBy === 'oldest') {
       sortedPosts.sort((a, b) => (a.publishedAt?.seconds ?? 0) - (b.publishedAt?.seconds ?? 0));
     } else if (sortBy === 'title') {
       sortedPosts.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? '', 'es-MX'));
@@ -133,6 +137,10 @@ export default function BlogPage() {
           {loading ? (
             <div className="rounded-[2rem] border border-slate-200/80 bg-white p-8 text-slate-500 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
               Cargando artículos...
+            </div>
+          ) : error ? (
+            <div className="rounded-[2rem] border border-red-100 bg-red-50 p-8 text-red-600 shadow-[0_24px_80px_rgba(15,23,42,0.08)] md:col-span-2 xl:col-span-3">
+              {error}
             </div>
           ) : posts.length === 0 ? (
             <div className="rounded-[2rem] border border-slate-200/80 bg-white p-8 text-slate-500 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
