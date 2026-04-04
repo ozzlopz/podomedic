@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AuthProviderWrapper from "@/components/AuthProviderWrapper";
-import Navigation from "@/components/Navigation";
-import WhatsAppButton from "@/components/WhatsAppButton";
+import SiteChrome from "@/components/SiteChrome";
 
 export const metadata: Metadata = {
   title: "Podomedic",
@@ -18,11 +17,7 @@ export default function RootLayout({
     <html lang="es" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-gray-50">
         <AuthProviderWrapper>
-          <Navigation />
-          <main className="flex-1 pt-24 sm:pt-28">
-            {children}
-          </main>
-          <WhatsAppButton />
+          <SiteChrome>{children}</SiteChrome>
         </AuthProviderWrapper>
       </body>
     </html>

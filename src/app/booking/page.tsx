@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { httpsCallable } from 'firebase/functions';
 import { Calendar, Clock, User, Mail, MessageSquare, CheckCircle, ArrowRight, ShieldCheck, Stethoscope, ChevronLeft, ChevronRight } from 'lucide-react';
+import { functions } from '@/lib/firebase';
 
 const dayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] as const;
 const monthLabels = [
@@ -34,6 +36,8 @@ function normalizeDate(date: Date) {
 export default function Booking() {
   const [form, setForm] = useState({ name: '', email: '', date: '', time: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [displayedMonth, setDisplayedMonth] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
@@ -65,10 +69,28 @@ export default function Booking() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle booking
-    setSubmitted(true);
+
+    if (!functions) {
+      setError('No se pudo conectar con Firebase Functions.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const createAppointment = httpsCallable(functions, 'createBookingAppointment');
+      await createAppointment(form);
+      setSubmitted(true);
+    } catch (submitError) {
+      const message =
+        submitError instanceof Error ? submitError.message : 'No fue posible registrar tu cita.';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (submitted) {
@@ -348,9 +370,19 @@ export default function Booking() {
                 />
               </div>
 
-              <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 text-lg font-semibold text-white transition-all hover:bg-slate-800">
+              {error && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 text-lg font-semibold text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
                 <Calendar className="h-5 w-5" />
-                Reservar Cita
+                {loading ? 'Registrando cita...' : 'Reservar Cita'}
               </button>
           </form>
 

@@ -1,1 +1,426 @@
-export {};
+import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { randomBytes } from "node:crypto";
+
+initializeApp();
+
+type AdminType = "superadmin" | "admin";
+type AccountStatus = "active" | "inactive";
+type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "completed";
+
+function splitName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return {
+      first_name: parts[0] ?? fullName.trim(),
+      last_name: "",
+    };
+  }
+
+  return {
+    first_name: parts.slice(0, -1).join(" "),
+    last_name: parts.at(-1) ?? "",
+  };
+}
+
+function createTemporaryPassword() {
+  return randomBytes(18).toString("base64url");
+}
+
+async function findOrCreatePatientProfile(params: {
+  email: string;
+  name: string;
+  phone?: string;
+  source: "booking" | "admin";
+}) {
+  const auth = getAuth();
+  const db = getFirestore();
+  const normalizedEmail = params.email.trim().toLowerCase();
+  const parsedName = splitName(params.name);
+
+  try {
+    const existingUser = await auth.getUserByEmail(normalizedEmail);
+    const userRef = db.collection("users").doc(existingUser.uid);
+    const existingProfile = await userRef.get();
+
+    const nextProfile = {
+      first_name: existingProfile.data()?.first_name ?? parsedName.first_name,
+      last_name: existingProfile.data()?.last_name ?? parsedName.last_name,
+      email: normalizedEmail,
+      phone: params.phone ?? existingProfile.data()?.phone ?? "",
+      role: existingProfile.data()?.role ?? "customer",
+      status: existingProfile.data()?.status ?? "active",
+      createdAt: existingProfile.data()?.createdAt ?? FieldValue.serverTimestamp(),
+      source: existingProfile.data()?.source ?? params.source,
+    };
+
+    await userRef.set(nextProfile, { merge: true });
+
+    return {
+      uid: existingUser.uid,
+      created: false,
+      profile: nextProfile,
+    };
+  } catch (error) {
+    const authError = error as { code?: string };
+
+    if (authError.code !== "auth/user-not-found") {
+      throw error;
+    }
+  }
+
+  const newUser = await auth.createUser({
+    email: normalizedEmail,
+    password: createTemporaryPassword(),
+    displayName: params.name.trim(),
+    disabled: true,
+  });
+
+  const newProfile = {
+    first_name: parsedName.first_name,
+    last_name: parsedName.last_name,
+    email: normalizedEmail,
+    phone: params.phone ?? "",
+    role: "customer",
+    status: "inactive",
+    createdAt: FieldValue.serverTimestamp(),
+    source: params.source,
+  };
+
+  await db.collection("users").doc(newUser.uid).set(newProfile);
+
+  return {
+    uid: newUser.uid,
+    created: true,
+    profile: newProfile,
+  };
+}
+
+async function assertSuperAdmin(uid: string) {
+  const db = getFirestore();
+  const snapshot = await db.collection("users").doc(uid).get();
+
+  if (!snapshot.exists) {
+    throw new HttpsError("permission-denied", "No se encontró el perfil del usuario autenticado.");
+  }
+
+  const data = snapshot.data();
+
+  if (data?.role !== "admin" || data?.admin_type !== "superadmin") {
+    throw new HttpsError("permission-denied", "Solo un superadministrador puede realizar esta acción.");
+  }
+
+  return data;
+}
+
+async function assertAdmin(uid: string) {
+  const db = getFirestore();
+  const snapshot = await db.collection("users").doc(uid).get();
+
+  if (!snapshot.exists) {
+    throw new HttpsError("permission-denied", "No se encontró el perfil del usuario autenticado.");
+  }
+
+  const data = snapshot.data();
+
+  if (data?.role !== "admin") {
+    throw new HttpsError("permission-denied", "Solo un administrador puede realizar esta acción.");
+  }
+
+  return data;
+}
+
+export const createAdminUser = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesión para crear administradores.");
+  }
+
+  await assertSuperAdmin(request.auth.uid);
+
+  const {
+    email,
+    password,
+    first_name,
+    last_name,
+    phone,
+    admin_type,
+  } = request.data as {
+    email?: string;
+    password?: string;
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    admin_type?: AdminType;
+  };
+
+  if (!email || !password || !first_name || !last_name) {
+    throw new HttpsError("invalid-argument", "Nombre, apellido, correo y contraseña son obligatorios.");
+  }
+
+  if (admin_type !== "admin" && admin_type !== "superadmin") {
+    throw new HttpsError("invalid-argument", "El tipo de administrador es inválido.");
+  }
+
+  const auth = getAuth();
+  const db = getFirestore();
+  const userRecord = await auth.createUser({
+    email,
+    password,
+    displayName: `${first_name} ${last_name}`.trim(),
+    disabled: false,
+  });
+
+  await db.collection("users").doc(userRecord.uid).set({
+    first_name,
+    last_name,
+    email,
+    phone: phone ?? "",
+    role: "admin",
+    admin_type,
+    status: "active",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    uid: userRecord.uid,
+    message: "Administrador creado correctamente.",
+  };
+});
+
+export const setAdminAccountStatus = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesión para actualizar administradores.");
+  }
+
+  await assertSuperAdmin(request.auth.uid);
+
+  const { uid, status } = request.data as { uid?: string; status?: AccountStatus };
+
+  if (!uid || (status !== "active" && status !== "inactive")) {
+    throw new HttpsError("invalid-argument", "Los datos para actualizar el estado son inválidos.");
+  }
+
+  const auth = getAuth();
+  const db = getFirestore();
+
+  await auth.updateUser(uid, {
+    disabled: status === "inactive",
+  });
+
+  await db.collection("users").doc(uid).update({
+    status,
+  });
+
+  return {
+    message: status === "active" ? "Administrador activado." : "Administrador desactivado.",
+  };
+});
+
+export const createCustomerUser = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesión para crear pacientes.");
+  }
+
+  await assertAdmin(request.auth.uid);
+
+  const {
+    email,
+    password,
+    first_name,
+    last_name,
+    phone,
+  } = request.data as {
+    email?: string;
+    password?: string;
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+  };
+
+  if (!email || !password || !first_name || !last_name) {
+    throw new HttpsError("invalid-argument", "Nombre, apellido, correo y contraseña son obligatorios.");
+  }
+
+  const auth = getAuth();
+  const db = getFirestore();
+  const userRecord = await auth.createUser({
+    email,
+    password,
+    displayName: `${first_name} ${last_name}`.trim(),
+    disabled: false,
+  });
+
+  await db.collection("users").doc(userRecord.uid).set({
+    first_name,
+    last_name,
+    email,
+    phone: phone ?? "",
+    role: "customer",
+    status: "active",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    uid: userRecord.uid,
+    message: "Paciente creado correctamente.",
+  };
+});
+
+export const setCustomerAccountStatus = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesión para actualizar pacientes.");
+  }
+
+  await assertAdmin(request.auth.uid);
+
+  const { uid, status } = request.data as { uid?: string; status?: AccountStatus };
+
+  if (!uid || (status !== "active" && status !== "inactive")) {
+    throw new HttpsError("invalid-argument", "Los datos para actualizar el estado son inválidos.");
+  }
+
+  const db = getFirestore();
+  const customerSnapshot = await db.collection("users").doc(uid).get();
+
+  if (!customerSnapshot.exists || customerSnapshot.data()?.role !== "customer") {
+    throw new HttpsError("failed-precondition", "La cuenta indicada no corresponde a un paciente.");
+  }
+
+  const auth = getAuth();
+
+  await auth.updateUser(uid, {
+    disabled: status === "inactive",
+  });
+
+  await db.collection("users").doc(uid).update({
+    status,
+  });
+
+  return {
+    message: status === "active" ? "Paciente activado." : "Paciente desactivado.",
+  };
+});
+
+export const createBookingAppointment = onCall(async (request) => {
+  const {
+    name,
+    email,
+    date,
+    time,
+    message,
+  } = request.data as {
+    name?: string;
+    email?: string;
+    date?: string;
+    time?: string;
+    message?: string;
+  };
+
+  if (!name || !email || !date || !time) {
+    throw new HttpsError("invalid-argument", "Nombre, correo, fecha y hora son obligatorios.");
+  }
+
+  const db = getFirestore();
+  const patient = await findOrCreatePatientProfile({
+    email,
+    name,
+    source: "booking",
+  });
+
+  const scheduledAt = new Date(`${date}T${time}:00`);
+
+  if (Number.isNaN(scheduledAt.getTime())) {
+    throw new HttpsError("invalid-argument", "La fecha u hora de la cita no son válidas.");
+  }
+
+  const appointmentRef = await db.collection("appointments").add({
+    userId: patient.uid,
+    patientName: name.trim(),
+    patientEmail: email.trim().toLowerCase(),
+    patientPhone: "",
+    scheduledAt,
+    reason: message?.trim() || "Solicitud desde formulario público",
+    notes: message?.trim() || "",
+    status: "pending",
+    source: "booking",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    appointmentId: appointmentRef.id,
+    patientId: patient.uid,
+    patientCreated: patient.created,
+    message: "Tu solicitud de cita fue registrada correctamente.",
+  };
+});
+
+export const createAdminAppointment = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesión para crear citas.");
+  }
+
+  await assertAdmin(request.auth.uid);
+
+  const {
+    patientId,
+    patientName,
+    patientEmail,
+    date,
+    time,
+    reason,
+    notes,
+    status,
+  } = request.data as {
+    patientId?: string;
+    patientName?: string;
+    patientEmail?: string;
+    date?: string;
+    time?: string;
+    reason?: string;
+    notes?: string;
+    status?: AppointmentStatus;
+  };
+
+  if (!patientId || !date || !time || !reason) {
+    throw new HttpsError("invalid-argument", "Paciente, fecha, hora y motivo son obligatorios.");
+  }
+
+  const db = getFirestore();
+  const userSnapshot = await db.collection("users").doc(patientId).get();
+
+  if (!userSnapshot.exists || userSnapshot.data()?.role !== "customer") {
+    throw new HttpsError("failed-precondition", "La cita debe ligarse a un paciente válido.");
+  }
+
+  const userData = userSnapshot.data();
+  const scheduledAt = new Date(`${date}T${time}:00`);
+
+  if (Number.isNaN(scheduledAt.getTime())) {
+    throw new HttpsError("invalid-argument", "La fecha u hora de la cita no son válidas.");
+  }
+
+  const appointmentRef = await db.collection("appointments").add({
+    userId: patientId,
+    patientName:
+      patientName?.trim() ||
+      [userData?.first_name, userData?.last_name].filter(Boolean).join(" ") ||
+      userData?.email ||
+      "Paciente",
+    patientEmail: patientEmail?.trim().toLowerCase() || userData?.email || "",
+    patientPhone: userData?.phone ?? "",
+    scheduledAt,
+    reason: reason.trim(),
+    notes: notes?.trim() || "",
+    status: status ?? "confirmed",
+    source: "admin",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    appointmentId: appointmentRef.id,
+    message: "Cita creada correctamente.",
+  };
+});

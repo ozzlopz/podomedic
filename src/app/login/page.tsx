@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import { doc, getDoc } from 'firebase/firestore';
 import { LogIn, Mail, Lock, AlertCircle, ShieldCheck, HeartPulse } from 'lucide-react';
+import { db } from '@/lib/firebase';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -20,8 +22,28 @@ export default function Login() {
     setLoading(true);
     setError('');
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      router.push('/');
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const userDoc = db ? await getDoc(doc(db, 'users', credential.user.uid)) : null;
+      const role = userDoc?.exists() ? userDoc.data().role : null;
+      const status = userDoc?.exists() ? userDoc.data().status : 'active';
+
+      if (status === 'inactive') {
+        await signOut(auth);
+        setError('Tu cuenta está desactivada. Contacta al superadministrador.');
+        return;
+      }
+
+      if (role === 'admin') {
+        router.push('/admin');
+        return;
+      }
+
+      if (role === 'customer') {
+        router.push('/customer');
+        return;
+      }
+
+      setError('Tu cuenta no tiene un rol configurado todavía. Contacta al administrador.');
     } catch {
       setError('Error al iniciar sesión. Verifica tus credenciales.');
     } finally {

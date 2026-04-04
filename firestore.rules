@@ -2,6 +2,79 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isSuperAdmin() {
+      return isAdmin() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin_type == 'superadmin';
+    }
+
+    function isSafeOwnerUpdate() {
+      return request.resource.data.role == resource.data.role &&
+        request.resource.data.admin_type == resource.data.admin_type &&
+        request.resource.data.status == resource.data.status;
+    }
+
+    function isCustomerRecord() {
+      return resource.data.role == 'customer';
+    }
+
+    function isAdminRecord() {
+      return resource.data.role == 'admin';
+    }
+
+    function isSafeAdminManagedCustomerUpdate() {
+      return isAdmin() &&
+        isCustomerRecord() &&
+        request.resource.data.role == 'customer' &&
+        request.resource.data.admin_type == resource.data.admin_type;
+    }
+
+    function isSafeSuperAdminManagedAdminUpdate() {
+      return isSuperAdmin() &&
+        isAdminRecord() &&
+        request.resource.data.role == 'admin';
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId);
+      allow update: if (isOwner(userId) && isSafeOwnerUpdate()) ||
+        isSafeAdminManagedCustomerUpdate() ||
+        isSafeSuperAdminManagedAdminUpdate();
+      allow delete: if false;
+    }
+
+    match /health_levels/{levelId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() ||
+        (isSignedIn() &&
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.userId == resource.data.userId);
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /consultations/{consultationId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
