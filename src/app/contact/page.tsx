@@ -9,9 +9,9 @@ import { functions } from '@/lib/firebase';
 
 export default function Contact() {
   const mapsEmbedUrl =
-    'https://www.google.com/maps?q=PODOMEDIC%20Pod%C3%B3loga%20en%20Pachuca&z=16&output=embed';
+    'https://www.google.com/maps?q=20.0336346,-98.796654&z=17&output=embed';
   const mapsDirectionsUrl =
-    'https://www.google.com/maps/place/PODOMEDIC+Pod%C3%B3loga+en+Pachuca/@20.0336346,-98.8131335,15z/';
+    'https://www.google.com/maps/search/?api=1&query=20.0336346,-98.796654';
 
   const [form, setForm] = useState(() => {
     const prefilledMessage =
