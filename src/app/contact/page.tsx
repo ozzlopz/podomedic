@@ -9,9 +9,9 @@ import { functions } from '@/lib/firebase';
 
 export default function Contact() {
   const mapsEmbedUrl =
-    'https://www.google.com/maps?q=@20.0333142,-98.7944523&z=15&output=embed';
+    'https://www.google.com/maps?q=@20.0335819,-98.7948085&z=15&output=embed';
   const mapsDirectionsUrl =
-    'https://www.google.com/maps/search/?api=1&query=20.0333142,-98.7944523,19.91z';
+    'https://www.google.com/maps/search/?api=1&query=20.0335819,-98.7948085,19.91z';
 
   const [form, setForm] = useState(() => {
     const prefilledMessage =
