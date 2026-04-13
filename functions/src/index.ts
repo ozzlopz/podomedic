@@ -662,6 +662,7 @@ export const createBookingAppointment = onCall(
       hour: "2-digit",
       minute: "2-digit",
     });
+    const whatsappUrl = "https://wa.me/527719625242?text=Hola%2C%20ya%20realic%C3%A9%20mi%20solicitud%20de%20cita%20en%20PodoMedic%20y%20quisiera%20dar%20seguimiento.";
 
     const adminEmailResult = await (async () => {
       try {
@@ -697,14 +698,19 @@ export const createBookingAppointment = onCall(
         return await sendResendEmail({
           to: [email.trim().toLowerCase()],
           subject: "Gracias por reservar tu cita en PodoMedic",
-          text: `Hola ${name.trim()},\n\nGracias por reservar tu cita en PodoMedic.\nRecibimos tu solicitud para ${localizedDate} a las ${localizedTime}.\nNos pondremos en contacto contigo para confirmar la cita y darte seguimiento.\n\nSi necesitas algo más, puedes escribirnos a contacto@podologapachuca.com.`,
+          text: `Hola ${name.trim()},\n\nGracias por reservar tu cita en PodoMedic.\nRecibimos tu solicitud para ${localizedDate} a las ${localizedTime}.\nNos pondremos en contacto contigo para confirmar la cita y darte seguimiento.\n\nSi necesitas algo más, puedes escribirnos a contacto@podologapachuca.com o por WhatsApp aquí: ${whatsappUrl}`,
           html: `
             <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a;">
               <h2 style="margin:0 0 16px;">Gracias por reservar tu cita</h2>
               <p>Hola ${name.trim()},</p>
               <p>Recibimos tu solicitud de cita para el <strong>${localizedDate}</strong> a las <strong>${localizedTime}</strong>.</p>
               <p>Nos pondremos en contacto contigo para confirmar la reservación y darte seguimiento.</p>
-              <p>Si tienes dudas adicionales, puedes escribirnos a <strong>contacto@podologapachuca.com</strong>.</p>
+              <p>
+                Si tienes dudas adicionales, puedes escribirnos a
+                <strong> contacto@podologapachuca.com </strong>
+                o por
+                <a href="${whatsappUrl}" style="color:#0891b2;font-weight:700;text-decoration:none;"> WhatsApp</a>.
+              </p>
             </div>
           `,
         });

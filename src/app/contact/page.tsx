@@ -9,9 +9,9 @@ import { functions } from '@/lib/firebase';
 
 export default function Contact() {
   const mapsEmbedUrl =
-    'https://www.google.com/maps?q=Av.%20La%20Principal%2010%2C%20Real%20de%20Toledo%2C%20Segundo%20Piso%2C%20Arriba%20de%20Laboratorios%20Coahuila%2C%20Pachuca%20de%20Soto%2C%20Hidalgo&z=16&output=embed';
+    'https://www.google.com/maps?q=PODOMEDIC%20Pod%C3%B3loga%20en%20Pachuca&z=16&output=embed';
   const mapsDirectionsUrl =
-    'https://www.google.com/maps/search/?api=1&query=Av.%20La%20Principal%2010%2C%20Real%20de%20Toledo%2C%20Segundo%20Piso%2C%20Arriba%20de%20Laboratorios%20Coahuila%2C%20Pachuca%20de%20Soto%2C%20Hidalgo';
+    'https://www.google.com/maps/place/PODOMEDIC+Pod%C3%B3loga+en+Pachuca/@20.0336346,-98.8131335,15z/';
 
   const [form, setForm] = useState(() => {
     const prefilledMessage =
@@ -143,37 +143,6 @@ export default function Contact() {
           </div>
         </section>
 
-        <section className="mt-2 rounded-[2.5rem] border border-slate-200/80 bg-white p-6 shadow-[0_28px_90px_rgba(15,23,42,0.08)] sm:p-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 className="text-3xl font-black text-slate-950">Cómo llegar</h2>
-              <p className="mt-2 max-w-2xl text-slate-600">
-                Encuéntranos en Av. La Principal 10, Real de Toledo, segundo piso, arriba de Laboratorios Coahuila.
-              </p>
-            </div>
-            <a
-              href={mapsDirectionsUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-semibold text-cyan-700 transition-all hover:bg-cyan-100"
-            >
-              <MapPin className="h-4 w-4" />
-              Abrir en Google Maps
-            </a>
-          </div>
-
-          <div className="mt-6 overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-100">
-            <iframe
-              title="Ubicación de PodoMedic en Google Maps"
-              src={mapsEmbedUrl}
-              className="h-[420px] w-full border-0"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              allowFullScreen
-            />
-          </div>
-        </section>
-
         <div className="mx-auto max-w-4xl rounded-[2.5rem] border border-slate-200/80 bg-white p-6 shadow-[0_28px_90px_rgba(15,23,42,0.08)] sm:p-10">
           <h2 className="text-3xl font-black text-slate-950">Envíanos un mensaje</h2>
           <p className="mt-2 text-slate-600">Cuéntanos tu duda y te orientaremos con la mejor opción.</p>
@@ -260,6 +229,37 @@ export default function Contact() {
             </a>
           </form>
         </div>
+
+        <section className="mx-auto mt-10 max-w-4xl rounded-[2.5rem] border border-slate-200/80 bg-white p-6 shadow-[0_28px_90px_rgba(15,23,42,0.08)] sm:p-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-3xl font-black text-slate-950">Cómo llegar</h2>
+              <p className="mt-2 max-w-2xl text-slate-600">
+                Encuéntranos en Av. La Principal 10, Real de Toledo, segundo piso, arriba de Laboratorios Coahuila.
+              </p>
+            </div>
+            <a
+              href={mapsDirectionsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-semibold text-cyan-700 transition-all hover:bg-cyan-100"
+            >
+              <MapPin className="h-4 w-4" />
+              Abrir en Google Maps
+            </a>
+          </div>
+
+          <div className="mt-6 overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-100">
+            <iframe
+              title="Ubicación de PodoMedic en Google Maps"
+              src={mapsEmbedUrl}
+              className="h-[420px] w-full border-0"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              allowFullScreen
+            />
+          </div>
+        </section>
       </div>
     </div>
   );
