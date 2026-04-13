@@ -497,6 +497,9 @@ export default function Booking() {
                   <div className="mt-4 rounded-2xl bg-slate-950 px-4 py-3 text-sm text-white/80">
                     Bloques de cita de 90 minutos. Horario del consultorio: lunes a viernes de 11:00 a.m. a 7:00 p.m. y sábados de 10:00 a.m. a 2:00 p.m.
                   </div>
+                  <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+                    Si requieres un horario en particular, contáctanos para acordarlo contigo.
+                  </div>
                 </div>
               </div>
 
