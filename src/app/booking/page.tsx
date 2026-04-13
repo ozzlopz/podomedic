@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { Calendar, Clock, User, Mail, MessageSquare, CheckCircle, ArrowRight, ShieldCheck, Stethoscope, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, User, Mail, Phone, MessageSquare, CheckCircle, ArrowRight, ShieldCheck, Stethoscope, ChevronLeft, ChevronRight } from 'lucide-react';
 import { functions } from '@/lib/firebase';
 import { defaultWeeklySchedule, formatDateValue, mergeWeeklySchedule, normalizeDateValue, type WeeklySchedule } from '@/lib/booking';
 
@@ -23,6 +23,18 @@ const monthLabels = [
   'Diciembre',
 ] as const;
 
+function formatPhoneMask(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 10);
+  const part1 = digits.slice(0, 3);
+  const part2 = digits.slice(3, 6);
+  const part3 = digits.slice(6, 10);
+
+  if (digits.length <= 3) return part1;
+  if (digits.length <= 6) return `${part1} ${part2}`;
+
+  return `${part1} ${part2} ${part3}`;
+}
+
 type AvailabilityResponse = {
   slots: string[];
   availableSlots: string[];
@@ -33,7 +45,7 @@ type AvailabilityResponse = {
 };
 
 export default function Booking() {
-  const [form, setForm] = useState({ name: '', email: '', date: '', time: '', message: '', acceptedPolicies: true });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', date: '', time: '', message: '', acceptedPolicies: true });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -173,10 +185,19 @@ export default function Booking() {
     setError('');
 
     try {
+      const normalizedPhone = form.phone.replace(/\D/g, '');
+
+      if (normalizedPhone.length !== 10) {
+        setError('Ingresa un teléfono válido de 10 dígitos.');
+        setLoading(false);
+        return;
+      }
+
       const createAppointment = httpsCallable(functions, 'createBookingAppointment');
       await createAppointment({
         name: form.name,
         email: form.email,
+        phone: normalizedPhone,
         date: form.date,
         time: form.time,
         message: form.message,
@@ -273,7 +294,7 @@ export default function Booking() {
               <h2 className="text-3xl font-black text-slate-950">Datos para tu cita</h2>
               <p className="mt-2 text-slate-600">Completa los campos y nos pondremos en contacto contigo.</p>
             </div>
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                 <div>
                   <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
                     <User className="h-4 w-4" />
@@ -286,6 +307,22 @@ export default function Booking() {
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
                     required
                   />
+                </div>
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <Phone className="h-4 w-4" />
+                    Teléfono
+                  </label>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: formatPhoneMask(e.target.value) })}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+                    placeholder="771 962 5242"
+                    required
+                  />
+                  <p className="mt-2 text-xs text-slate-500">Usa un número de 10 dígitos para poder contactarte.</p>
                 </div>
                 <div>
                   <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">

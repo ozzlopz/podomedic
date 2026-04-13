@@ -84,6 +84,7 @@ async function getAppointmentSchedule() {
 
 async function sendResendEmail(params: {
   to: string[];
+  cc?: string[];
   subject: string;
   html: string;
   text: string;
@@ -108,6 +109,7 @@ async function sendResendEmail(params: {
     body: JSON.stringify({
       from: fromEmail,
       to: params.to,
+      cc: params.cc,
       subject: params.subject,
       reply_to: params.replyTo,
       text: params.text,
@@ -598,19 +600,23 @@ export const createBookingAppointment = onCall(
     const {
       name,
       email,
+      phone,
       date,
       time,
       message,
     } = request.data as {
       name?: string;
       email?: string;
+      phone?: string;
       date?: string;
       time?: string;
       message?: string;
     };
 
-    if (!name || !email || !date || !time) {
-      throw new HttpsError("invalid-argument", "Nombre, correo, fecha y hora son obligatorios.");
+    const normalizedPhone = phone?.replace(/\D/g, "") ?? "";
+
+    if (!name || !email || !date || !time || normalizedPhone.length !== 10) {
+      throw new HttpsError("invalid-argument", "Nombre, correo, teléfono, fecha y hora son obligatorios.");
     }
 
     await assertSlotAvailable({ date, time });
@@ -619,6 +625,7 @@ export const createBookingAppointment = onCall(
     const patient = await findOrCreatePatientProfile({
       email,
       name,
+      phone: normalizedPhone,
       source: "booking",
     });
 
@@ -632,7 +639,7 @@ export const createBookingAppointment = onCall(
       userId: patient.uid,
       patientName: name.trim(),
       patientEmail: email.trim().toLowerCase(),
-      patientPhone: "",
+      patientPhone: normalizedPhone,
       scheduledDate: date,
       scheduledTime: time,
       scheduledAt,
@@ -660,14 +667,16 @@ export const createBookingAppointment = onCall(
       try {
         return await sendResendEmail({
           to: ["contacto@podologapachuca.com"],
+          cc: ["podomedic.mx@gmail.com"],
           replyTo: email.trim().toLowerCase(),
           subject: `Nueva reservación de cita de ${name.trim()}`,
-          text: `Se registró una nueva reservación.\n\nPaciente: ${name.trim()}\nCorreo: ${email.trim().toLowerCase()}\nFecha: ${localizedDate}\nHora: ${localizedTime}\n\nMotivo:\n${message?.trim() || "Solicitud desde formulario público"}`,
+          text: `Se registró una nueva reservación.\n\nPaciente: ${name.trim()}\nCorreo: ${email.trim().toLowerCase()}\nTeléfono: ${normalizedPhone}\nFecha: ${localizedDate}\nHora: ${localizedTime}\n\nMotivo:\n${message?.trim() || "Solicitud desde formulario público"}`,
           html: `
             <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a;">
               <h2 style="margin:0 0 16px;">Nueva reservación de cita</h2>
               <p><strong>Paciente:</strong> ${name.trim()}</p>
               <p><strong>Correo:</strong> ${email.trim().toLowerCase()}</p>
+              <p><strong>Teléfono:</strong> ${normalizedPhone}</p>
               <p><strong>Fecha:</strong> ${localizedDate}</p>
               <p><strong>Hora:</strong> ${localizedTime}</p>
               <p><strong>Motivo:</strong></p>
